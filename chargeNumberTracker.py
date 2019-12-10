@@ -9,6 +9,7 @@ import os
 import contextlib
 import tkcalendar as tkc
 import operator
+import dataStore
 
 test = True
 
@@ -52,48 +53,15 @@ class HourTracker():
 	def __enter__(self):
 		if os.path.isfile(self.path):
 			with open(self.path, 'r') as file:
-				self.data = json.load(file)
+				data = json.load(file)
 		else:
-			self.data = {'projects':{"0":{'name':'Arrive', 'billable': False}, "1":{'name': 'Break', 'billable': False}},
-					'records':{}, 'dailyHours': 8}
-		self.dailyHours = float(self.data['dailyHours'])
-		self.projects = []
-		projectMap = {}
-		for chargeNumberStr, projectAttr in sorted(self.data['projects'].items()):
-			chargeNumber = int(chargeNumberStr)
-			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'])
-			self.projects.append(project)
-			if chargeNumber == 0:
-				self.arriveProject = project
-			projectMap[chargeNumber] = project
-		
-		self.timeRecord = {}
-		for dateStr, records in sorted(self.data['records'].items()):
-			date = dt.datetime.strptime(dateStr, '%Y-%m-%d').date()
-			self.timeRecord[date] = {}
-			for time, chargeNumber in sorted(records.items()):
-				project = projectMap[chargeNumber]
-				dtTime = dt.datetime.fromtimestamp(float(time))
-				self.timeRecord[date][dtTime] = project
-				if chargeNumber != 0:
-					project.addHours(dtTime - prevTime, date)
-				prevTime = dtTime
-				self.prevTime = max(prevTime, self.prevTime)
-
+			data = {}
+		self.dailyHours, self.projects, self.timeRecord, self.prevTime = dataStore.fromDict(data)
 
 	def __exit__(self, exc_type, exc_value, tbk):
-		self.data['projects'] = {}
-		for project in self.projects:
-			self.data['projects'][project.chargeNumber] = {'name': project.name, 'billable': project.isBillable}
-
-		self.data['records'] = {}
-		for date, records in self.timeRecord.items():
-			self.data['records'][date.isoformat()] = {}
-			for time, project in records.items():
-				self.data['records'][date.isoformat()][dt.datetime.timestamp(time)] = project.chargeNumber
-		self.data['dailyHours'] = self.dailyHours
+		data = dataStore.toDict(self.dailyHours, self.projects, self.timeRecord)
 		with open(self.path, 'w') as file:
-			json.dump(self.data, file, indent=4, sort_keys=True)
+			json.dump(data, file, indent=4, sort_keys=True)
 
 	def registerAddProjectCallback(self, func):
 		self.addProjectCallback.append(func)
