@@ -8,14 +8,16 @@ import platform
 import os
 import contextlib
 import tkcalendar as tkc
+import operator
 
 test = True
 
 class Project():
-	def __init__(self, name, chargeNumber):
+	def __init__(self, name, chargeNumber, isBillable):
 		self.name = name
 		self.chargeNumber = chargeNumber
 		self.hours = {}
+		self.isBillable = isBillable
 
 	def addHours(self, hours, date):
 		assert(isinstance(hours, float) or isinstance(hours, dt.timedelta))
@@ -24,11 +26,13 @@ class Project():
 		if isinstance(hours, float):
 			self.hours[date] += hours
 		elif isinstance(hours, dt.timedelta):
-			self.hours[date] += hours.total_seconds() / 60 / 60
+			self.hours[date] += hours.total_seconds() / 60.0 / 60.0
 
 	def getBillableHours(self, date):
+		if not self.isBillable:
+			return 0
 		if date in self.hours:
-			return int(self.hours[date] * 4) / 4
+			return np.round(self.hours[date] * 4) / 4
 		else:
 			return 0
 
@@ -41,19 +45,23 @@ class HourTracker():
 		self.start = None
 		self.prevTime = dt.datetime.fromtimestamp(0)
 		self.arriveProject = None
+		self.addProjectCallback = []
+		self.addHoursCallback = []
+		self.dailyHours = 0
 
 	def __enter__(self):
 		if os.path.isfile(self.path):
 			with open(self.path, 'r') as file:
 				self.data = json.load(file)
 		else:
-			self.data = {'projects':{"0":'arrive', "1":'lunch'},
-					'records':{}}
+			self.data = {'projects':{"0":{'name':'Arrive', 'billable': False}, "1":{'name': 'Break', 'billable': False}},
+					'records':{}, 'dailyHours': 8}
+		self.dailyHours = float(self.data['dailyHours'])
 		self.projects = []
 		projectMap = {}
-		for chargeNumberStr, projectName in sorted(self.data['projects'].items()):
+		for chargeNumberStr, projectAttr in sorted(self.data['projects'].items()):
 			chargeNumber = int(chargeNumberStr)
-			project = Project(projectName, chargeNumber)
+			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'])
 			self.projects.append(project)
 			if chargeNumber == 0:
 				self.arriveProject = project
@@ -76,21 +84,30 @@ class HourTracker():
 	def __exit__(self, exc_type, exc_value, tbk):
 		self.data['projects'] = {}
 		for project in self.projects:
-			self.data['projects'][project.chargeNumber] = project.name
+			self.data['projects'][project.chargeNumber] = {'name': project.name, 'billable': project.isBillable}
 
 		self.data['records'] = {}
 		for date, records in self.timeRecord.items():
 			self.data['records'][date.isoformat()] = {}
 			for time, project in records.items():
 				self.data['records'][date.isoformat()][dt.datetime.timestamp(time)] = project.chargeNumber
+		self.data['dailyHours'] = self.dailyHours
 		with open(self.path, 'w') as file:
 			json.dump(self.data, file)
 
+	def registerAddProjectCallback(self, func):
+		self.addProjectCallback.append(func)
+
+	def registerAddHoursCallback(self, func):
+		self.addHoursCallback.append(func)
+
 	def getProjectNames(self):
-		return [project.name for project in self.projects if project.chargeNumber > 0]
+		return {project.name:project for project in self.projects if project.chargeNumber > 0}
 
 	def addProject(self, project):
 		self.projects.append(project)
+		for func in self.addProjectCallback:
+			func(project)
 
 	def __today(self):
 		return self.timeRecord[dt.datetime.today().date()]
@@ -100,12 +117,30 @@ class HourTracker():
 		self.prevTime = self.start
 		self.timeRecord[dt.datetime.today().date()] = {}
 		self.__today()[self.start] = self.arriveProject
+		for func in self.addHoursCallback:
+			func(self.arriveProject)
 
 	def recordHours(self, project):
 		time = dt.datetime.now()
 		self.__today()[time] = project
 		project.addHours(time - self.prevTime, time.date())
 		self.prevTime = time
+		for func in self.addHoursCallback:
+			func(project)
+
+	def getTodayTotalHours(self):
+		date = dt.datetime.today().date()
+		totalHours = 0
+		projectHours = self.getHours(date)
+		for chargeNumber, hours in projectHours.items():
+			totalHours += hours
+		return totalHours
+
+	def getTodayRemainingHours(self):
+		return self.dailyHours - self.getTodayTotalHours()
+
+	def getEarliestReleaseTime(self):
+		return self.prevTime + dt.timedelta(hours=self.getTodayRemainingHours())
 
 	def getHours(self, date):
 		retval = {}
@@ -119,10 +154,16 @@ class HourTrackerViewer(tk.Frame):
 		super().__init__(master)
 		self.timeRecord = hourTracker.timeRecord
 
-		self.innerFrame = tk.Frame(self)
+		self.innerFrame = None
+		self.nameMap = None
 		self.__createWidget()
+		self.hourTracker.registerAddProjectCallback(self.updateProject)
+
 
 	def __createWidget(self):
+		if self.innerFrame is not None:
+			self.innerFrame.destroy()
+		self.innerFrame = tk.Frame(self)
 		self.dateSelector = tk.StringVar()
 		dateEntry = tkc.DateEntry(self.innerFrame, textvariable=self.dateSelector, maxdate=dt.datetime.today())
 		dateEntry.grid(row=0, column=0, columnspan=2)
@@ -132,26 +173,27 @@ class HourTrackerViewer(tk.Frame):
 		self.setDate()
 
 		self.projectSelector = tk.StringVar()
-		projectNames = self.hourTracker.getProjectNames()
-		if len(projectNames) > 0:
-			self.projectSelector.set(self.hourTracker.getProjectNames()[0])
+		self.nameMap = self.hourTracker.getProjectNames()
+		self.projectNames = [project.name for project in sorted(self.nameMap.values(), key=operator.attrgetter('chargeNumber'))]
+		if len(self.nameMap) > 0:
+			self.projectSelector.set(self.projectNames[0])
 
-		tk.OptionMenu(self.innerFrame, self.projectSelector, *tuple(self.hourTracker.getProjectNames())).grid(row=2, column=0)
+		tk.OptionMenu(self.innerFrame, self.projectSelector, *tuple(self.projectNames)).grid(row=2, column=0)
 		tk.Button(self.innerFrame, text='Record', command=self.recordActivity).grid(row=2, column=1)
 
 		self.innerFrame.grid(row=0, column=0)
 
+	def updateProject(self, project):
+		self.__createWidget()
+
 	def update(self):
-		self.innerFrame.destroy()
-		self.innerFrame = tk.Frame(self)
 		self.__createWidget()
 
 	def recordActivity(self):
 		projectName = self.projectSelector.get()
-		projectIndex = self.hourTracker.getProjectNames().index(projectName)
-		project = self.hourTracker.projects[projectIndex]
+		project = self.nameMap[projectName]
 		self.hourTracker.recordHours(project)
-		self.projectSelector.set(self.hourTracker.getProjectNames()[0])
+		self.projectSelector.set(self.projectNames[0])
 		self.innerFrame.destroy()
 		self.innerFrame = tk.Frame(self)
 		self.__createWidget()
@@ -171,21 +213,33 @@ class HourTrackerViewer(tk.Frame):
 
 class ProjectList(tk.Frame):
 	def __init__(self, master, hourTracker):
-		self.hourTracker = hourTracker
 		super().__init__(master)
+		self.hourTracker = hourTracker
+		self.hourTracker.registerAddHoursCallback(self.updateHours)
 
 		self.innerFrame = None
+		self.createWidget()
+
+	def updateHours(self, project):
 		self.createWidget()
 
 	def createWidget(self):
 		if self.innerFrame is not None:
 			self.innerFrame.destroy()
 		self.innerFrame = tk.Frame(self)
+
 		row = 0
-		for project in self.hourTracker.projects:
+		today = dt.datetime.today().date()
+		for project in sorted(self.hourTracker.projects, key=operator.attrgetter('chargeNumber')):
 			if project.chargeNumber > 0:
 				tk.Label(self.innerFrame, text=project.name, anchor=tk.NW).grid(row=row, column=0)
 				tk.Label(self.innerFrame, text='%s' % (project.chargeNumber), anchor=tk.NW).grid(row=row, column=1)
+
+				billableHours = project.getBillableHours(today)
+				if billableHours > 0:
+					tk.Label(self.innerFrame, text='%.2f hrs' % (billableHours), anchor=tk.NW).grid(row=row, column=2)
+				else:
+					tk.Label(self.innerFrame, text="").grid(row=row, column=2)
 				row += 1
 
 		self.projectEntry = tk.StringVar()
@@ -193,13 +247,17 @@ class ProjectList(tk.Frame):
 		tk.Entry(self.innerFrame, textvariable=self.projectEntry).grid(row=row, column=0)
 		tk.Entry(self.innerFrame, textvariable=self.chargeNumberEntry).grid(row=row, column=1)
 		tk.Button(self.innerFrame, text='Add Project', command=self.addProject).grid(row=row, column=2)
+
+		tk.Label(self.innerFrame, text="Total Hours: %.2f" % (self.hourTracker.getTodayTotalHours()), anchor=tk.NW).grid(row=0, column=3)
+		tk.Label(self.innerFrame, text="Earliest Off Time: %s" % (self.hourTracker.getEarliestReleaseTime().time().strftime('%H:%M')), anchor=tk.NW).grid(row=1, column=3)
+
 		self.innerFrame.grid(row=0, column=0)
 
 	def addProject(self):
 		self.hourTracker.addProject(Project(self.projectEntry.get(), int(self.chargeNumberEntry.get())))
 		self.projectEntry.set("")
 		self.chargeNumberEntry.set('')
-		self.createWidget()
+		self.createWidget()		
 
 class ChargeNumberTrackerApp:
 	def __init__(self):
