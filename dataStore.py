@@ -10,6 +10,8 @@ def fromDict(serialData):
 		ver = float(serialData['version'])
 		if ver in readerMap:
 			return readerMap[ver].fromDict(serialData)
+	else:
+		return v0_0.fromDict(serialData)
 
 def toDict(dailyHours, projects, timeRecord):
 	readerMap = {}
@@ -61,6 +63,7 @@ class v0_0(BaseVersion):
 			projectMap[chargeNumber] = project
 		
 		timeRecord = {}
+		prevTime = dt.datetime.fromtimestamp(0)
 		for dateStr, records in sorted(data['records'].items()):
 			date = dt.datetime.strptime(dateStr, '%Y-%m-%d').date()
 			timeRecord[date] = {}
@@ -112,6 +115,7 @@ class v1_0(BaseVersion):
 			projectMap[chargeNumber] = project
 		
 		timeRecord = {}
+		prevTime = dt.datetime.fromtimestamp(0)
 		for dateStr, records in sorted(data['records'].items()):
 			date = dt.datetime.strptime(dateStr, '%Y-%m-%d').date()
 			timeRecord[date] = {}
