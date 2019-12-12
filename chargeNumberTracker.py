@@ -8,6 +8,7 @@ import platform
 import os
 import contextlib
 import tkcalendar as tkc
+from tkinter import messagebox as tkMessageBox
 import operator
 import dataStore
 
@@ -160,7 +161,11 @@ class HourTrackerViewer(tk.Frame):
 	def recordActivity(self):
 		projectName = self.projectSelector.get()
 		project = self.nameMap[projectName]
-		self.hourTracker.recordHours(project)
+		try:
+			self.hourTracker.recordHours(project)
+		except KeyError:
+			tkMessageBox.showerror('Entry Error', 'Error: Start time not found!')
+			return
 		self.projectSelector.set(self.projectNames[0])
 		self.innerFrame.destroy()
 		self.innerFrame = tk.Frame(self)
@@ -222,7 +227,7 @@ class ProjectList(tk.Frame):
 		self.innerFrame.grid(row=0, column=0)
 
 	def addProject(self):
-		self.hourTracker.addProject(Project(self.projectEntry.get(), int(self.chargeNumberEntry.get())))
+		self.hourTracker.addProject(Project(self.projectEntry.get(), int(self.chargeNumberEntry.get()), True))
 		self.projectEntry.set("")
 		self.chargeNumberEntry.set('')
 		self.createWidget()		
