@@ -234,21 +234,6 @@ class ProjectList(tk.Frame):
 
 class ChargeNumberTrackerApp:
 	def __init__(self):
-		self.master = tk.Tk()
-		self.master.protocol("WM_DELETE_WINDOW", self.destroy)
-
-		self.master.title('Charge Number Hour Tracker')
-
-		def createMenu():
-			menubar = tk.Menu(self.master)
-			filemenu = tk.Menu(menubar, tearoff=0)
-			filemenu.add_command(label='Arrive', command=self.arrive)
-			filemenu.add_command(label='Get Hours', command=self.getHours)
-			filemenu.add_command(label='Exit', command=self.destroy)
-			menubar.add_cascade(label="File", menu=filemenu)
-			self.master.config(menu=menubar)
-		createMenu()
-
 		self.platform = platform.system()
 		if test:
 			self.dataPath = os.path.join('.', '.chargeNumber')
@@ -264,7 +249,31 @@ class ChargeNumberTrackerApp:
 			os.mkdir(self.dataPath)
 
 		self.tracker = HourTracker(self.dataPath)
-		self.tracker.__enter__()
+
+		self.master = tk.Tk()
+		self.master.protocol("WM_DELETE_WINDOW", self.destroy)
+
+		self.master.title('Charge Number Hour Tracker')
+
+		def createMenu():
+			menubar = tk.Menu(self.master)
+			filemenu = tk.Menu(menubar, tearoff=0)
+			filemenu.add_command(label='Arrive', command=self.arrive)
+			filemenu.add_command(label='Get Hours', command=self.getHours)
+			filemenu.add_command(label='Exit', command=self.destroy)
+			menubar.add_cascade(label="File", menu=filemenu)
+			self.master.config(menu=menubar)
+		createMenu()
+		
+		try:
+			self.tracker.__enter__()
+		except:
+			if tkMessageBox.askyesno("Charge Number Hour Tracker", "Failed to "
+				"load data - would you like to delete the old data?"):
+				os.remove(self.tracker.path)
+				self.tracker.__enter__()
+			else:
+				return
 
 		self.htViewer = HourTrackerViewer(self.master, self.tracker)
 		self.htViewer.grid(row=0, column=0, sticky=tk.NW)
