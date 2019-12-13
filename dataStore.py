@@ -75,7 +75,7 @@ class v0_0(BaseVersion):
 					project.addHours(dtTime - prevTime, date)
 				prevTime = dtTime
 				prevTime = max(prevTime, prevTime)
-		return (dailyHours, projects, timeRecord, prevTime)
+		return (dailyHours, projects, timeRecord, prevTime, arriveProject)
 
 	@classmethod
 	def toDict(self, dailyHours, projects, timeRecord):
@@ -127,7 +127,7 @@ class v1_0(BaseVersion):
 					project.addHours(dtTime - prevTime, date)
 				prevTime = dtTime
 				prevTime = max(prevTime, prevTime)
-		return (dailyHours, projects, timeRecord, prevTime)
+		return (dailyHours, projects, timeRecord, prevTime, arriveProject)
 
 	@classmethod
 	def toDict(self, dailyHours, projects, timeRecord):

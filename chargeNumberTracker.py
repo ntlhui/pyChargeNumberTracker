@@ -57,7 +57,8 @@ class HourTracker():
 				data = json.load(file)
 		else:
 			data = {}
-		self.dailyHours, self.projects, self.timeRecord, self.prevTime = dataStore.fromDict(data)
+		self.dailyHours, self.projects, self.timeRecord, self.prevTime, \
+			self.arriveProject = dataStore.fromDict(data)
 
 	def __exit__(self, exc_type, exc_value, tbk):
 		data = dataStore.toDict(self.dailyHours, self.projects, self.timeRecord)
@@ -179,6 +180,7 @@ class HourTrackerViewer(tk.Frame):
 		if date in self.hourTracker.timeRecord:
 			row = 0
 			for record in sorted(self.hourTracker.timeRecord[date].items()):
+				print(record)
 				tk.Label(self.recordFrame, text=record[0].strftime('%H:%M')).grid(row=row, column=0)
 				tk.Label(self.recordFrame, text=record[1].name).grid(row=row, column=1)
 				row += 1
@@ -270,7 +272,10 @@ class ChargeNumberTrackerApp:
 		except:
 			if tkMessageBox.askyesno("Charge Number Hour Tracker", "Failed to "
 				"load data - would you like to delete the old data?"):
-				os.remove(self.tracker.path)
+				try:
+					os.remove(self.tracker.path)
+				except:
+					pass
 				self.tracker.__enter__()
 			else:
 				return
