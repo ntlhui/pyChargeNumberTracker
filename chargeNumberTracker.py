@@ -126,6 +126,7 @@ class HourTrackerViewer(tk.Frame):
 
 		self.innerFrame = None
 		self.nameMap = None
+		self.projectNameIdx = 0
 		self.__createWidget()
 		self.hourTracker.registerAddProjectCallback(self.updateProject)
 
@@ -146,12 +147,27 @@ class HourTrackerViewer(tk.Frame):
 		self.nameMap = self.hourTracker.getProjectNames()
 		self.projectNames = [project.name for project in sorted(self.nameMap.values(), key=operator.attrgetter('chargeNumber'))]
 		if len(self.nameMap) > 0:
-			self.projectSelector.set(self.projectNames[0])
+			self.projectSelector.set(self.projectNames[self.projectNameIdx])
 
 		tk.OptionMenu(self.innerFrame, self.projectSelector, *tuple(self.projectNames)).grid(row=2, column=0)
-		tk.Button(self.innerFrame, text='Record', command=self.recordActivity).grid(row=2, column=1)
+		button = tk.Button(self.innerFrame, text='Record', command=self.recordActivity)
+		button.grid(row=2, column=1)
+		button.bind("<Up>", self.__changeProjectUp)
+		button.bind("<Down>", self.__changeProjectDown)
 
 		self.innerFrame.grid(row=0, column=0)
+
+	def __changeProjectUp(self, *args):
+		self.projectNameIdx -= 1
+		if self.projectNameIdx < 0:
+			self.projectNameIdx = 0
+		self.projectSelector.set(self.projectNames[self.projectNameIdx])
+
+	def __changeProjectDown(self, *args):
+		self.projectNameIdx += 1
+		if self.projectNameIdx >= len(self.projectNames):
+			self.projectNameIdx = len(self.projectNames) - 1
+		self.projectSelector.set(self.projectNames[self.projectNameIdx])
 
 	def updateProject(self, project):
 		self.__createWidget()
@@ -219,15 +235,21 @@ class ProjectList(tk.Frame):
 		self.projectEntry = tk.StringVar()
 		self.chargeNumberEntry = tk.StringVar()
 		tk.Entry(self.innerFrame, textvariable=self.projectEntry).grid(row=row, column=0)
-		tk.Entry(self.innerFrame, textvariable=self.chargeNumberEntry).grid(row=row, column=1)
-		tk.Button(self.innerFrame, text='Add Project', command=self.addProject).grid(row=row, column=2)
+		entry = tk.Entry(self.innerFrame, textvariable=self.chargeNumberEntry)
+		entry.grid(row=row, column=1)
+		entry.bind('<Return>', self.addProject)
+		entry.bind('<KP_Enter>', self.addProject)
+		button = tk.Button(self.innerFrame, text='Add Project', command=self.addProject)
+		button.grid(row=row, column=2)
+		button.bind('<Return>', self.addProject)
+		button.bind('<KP_Enter>', self.addProject)
 
 		tk.Label(self.innerFrame, text="Total Hours: %.2f" % (self.hourTracker.getTodayTotalHours()), anchor=tk.NW).grid(row=0, column=3)
 		tk.Label(self.innerFrame, text="Earliest Off Time: %s" % (self.hourTracker.getEarliestReleaseTime().time().strftime('%H:%M')), anchor=tk.NW).grid(row=1, column=3)
 
 		self.innerFrame.grid(row=0, column=0)
 
-	def addProject(self):
+	def addProject(self, *args):
 		self.hourTracker.addProject(Project(self.projectEntry.get(), int(self.chargeNumberEntry.get()), True))
 		self.projectEntry.set("")
 		self.chargeNumberEntry.set('')
