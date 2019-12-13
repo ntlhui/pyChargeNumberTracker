@@ -180,7 +180,6 @@ class HourTrackerViewer(tk.Frame):
 		if date in self.hourTracker.timeRecord:
 			row = 0
 			for record in sorted(self.hourTracker.timeRecord[date].items()):
-				print(record)
 				tk.Label(self.recordFrame, text=record[0].strftime('%H:%M')).grid(row=row, column=0)
 				tk.Label(self.recordFrame, text=record[1].name).grid(row=row, column=1)
 				row += 1
