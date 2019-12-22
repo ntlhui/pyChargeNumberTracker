@@ -99,7 +99,7 @@ class HourTracker():
 			func(project)
 
 	def getTodayTotalHours(self):
-		date = dt.datetime.today().date()
+		date = dt.datetime.now().date()
 		totalHours = 0
 		projectHours = self.getHours(date)
 		for chargeNumber, hours in projectHours.items():
@@ -110,6 +110,8 @@ class HourTracker():
 		return self.dailyHours - self.getTodayTotalHours()
 
 	def getEarliestReleaseTime(self):
+		if self.prevTime.date() != dt.datetime.now().date():
+			return dt.datetime.now() + dt.timedelta(hours=self.getTodayRemainingHours())
 		return self.prevTime + dt.timedelta(hours=self.getTodayRemainingHours())
 
 	def getHours(self, date):
@@ -245,6 +247,7 @@ class ProjectList(tk.Frame):
 		button.bind('<KP_Enter>', self.addProject)
 
 		tk.Label(self.innerFrame, text="Total Hours: %.2f" % (self.hourTracker.getTodayTotalHours()), anchor=tk.NW).grid(row=0, column=3)
+		earliestReleaseTime = self.hourTracker.getEarliestReleaseTime()
 		tk.Label(self.innerFrame, text="Earliest Off Time: %s" % (self.hourTracker.getEarliestReleaseTime().time().strftime('%H:%M')), anchor=tk.NW).grid(row=1, column=3)
 
 		self.innerFrame.grid(row=0, column=0)
