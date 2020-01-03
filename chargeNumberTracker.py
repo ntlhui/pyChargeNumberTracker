@@ -138,8 +138,8 @@ class HourTracker():
 
     def getEarliestReleaseTime(self):
         if self.prevTime.date() != dt.datetime.now().date():
-            return dt.datetime.now() + dt.timedelta(hours=self.getTodayRemainingHours())
-        return self.prevTime + dt.timedelta(hours=self.getTodayRemainingHours())
+            return dt.datetime.now() + dt.timedelta(hours=self.getTodayRemainingHours()) - dt.timedelta(minutes=7.5)
+        return self.prevTime + dt.timedelta(hours=self.getTodayRemainingHours()) - dt.timedelta(minutes=7.5)
 
     def getHours(self, date):
         retval = {}
