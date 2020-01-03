@@ -13,14 +13,26 @@ def fromDict(serialData):
 	else:
 		return v0_0.fromDict(serialData)
 
-def toDict(dailyHours, projects, timeRecord):
+def toDict(**kwargs):
 	readerMap = {}
 	maxVer = 0
 	for subclass in BaseVersion.__subclasses__():
 		readerMap[subclass.version()] = subclass
 		maxVer = max(subclass.version(), maxVer)
-	return readerMap[maxVer].toDict(dailyHours, projects, timeRecord)
+	return readerMap[maxVer].toDict(**kwargs)
 
+
+outDictKeys = ['dailyHours', 
+				'projects', 
+				'timeRecord', 
+				'prevTime', 
+				'arriveProject', 
+				'recordHoursPath']
+
+inDictKeys = ['dailyHours', 
+				'projects', 
+				'timeRecord', 
+				'recordHoursPath']
 
 class BaseVersion(ABC):
 	@classmethod
@@ -30,7 +42,7 @@ class BaseVersion(ABC):
 
 	@classmethod
 	@abstractmethod
-	def toDict(self, dailyHours, projects, timeRecord):
+	def toDict(self, **kwargs):
 		pass
 
 	@classmethod
@@ -49,6 +61,7 @@ class v0_0(BaseVersion):
 		data['projects']['1'] = {'billable': False, 'name': 'Break'}
 		data['records'] = {}
 		data['version'] = 0
+		data['recordHoursPath'] = ''
 		data.update(serialData)
 
 		dailyHours = float(data['dailyHours'])
@@ -75,10 +88,15 @@ class v0_0(BaseVersion):
 					project.addHours(dtTime - prevTime, date)
 				prevTime = dtTime
 				prevTime = max(prevTime, prevTime)
-		return (dailyHours, projects, timeRecord, prevTime, arriveProject)
+		return {"dailyHours":dailyHours, 
+				"projects":projects, 
+				"timeRecord":timeRecord, 
+				"prevTime":prevTime, 
+				"arriveProject":arriveProject,
+				'recordHoursPath':data['recordHoursPath']}
 
 	@classmethod
-	def toDict(self, dailyHours, projects, timeRecord):
+	def toDict(self, **kwargs):
 		raise NotImplementedError()
 
 	@classmethod
@@ -101,6 +119,7 @@ class v1_0(BaseVersion):
 		data['projects']['1'] = {'billable': False, 'name': 'Break'}
 		data['records'] = {}
 		data['version'] = 0
+		data['recordHoursPath'] = ''
 		data.update(serialData)
 
 		dailyHours = float(data['dailyHours'])
@@ -127,10 +146,18 @@ class v1_0(BaseVersion):
 					project.addHours(dtTime - prevTime, date)
 				prevTime = dtTime
 				prevTime = max(prevTime, prevTime)
-		return (dailyHours, projects, timeRecord, prevTime, arriveProject)
+		return {"dailyHours":dailyHours, 
+				"projects":projects, 
+				"timeRecord":timeRecord, 
+				"prevTime":prevTime, 
+				"arriveProject":arriveProject,
+				'recordHoursPath':data['recordHoursPath']}
 
 	@classmethod
-	def toDict(self, dailyHours, projects, timeRecord):
+	def toDict(self, **kwargs):
+		dailyHours = kwargs['dailyHours']
+		projects = kwargs['projects']
+		timeRecord = kwargs['timeRecord']
 		data = {}
 		data['projects'] = {}
 		for project in projects:
@@ -149,3 +176,80 @@ class v1_0(BaseVersion):
 	@classmethod
 	def version(self):
 		return 1.0
+
+class v1_1(BaseVersion):
+	@classmethod
+	def fromDict(self, serialData):
+		assert(isinstance(serialData, dict))
+		assert('version' in serialData)
+		assert(float(serialData['version']) == 1.1)
+		assert('records' in serialData)
+		assert('projects' in serialData)
+		assert('dailyHours' in serialData)
+		data = {}
+		data['dailyHours'] = 8.0
+		data['projects'] = {}
+		data['projects']['0'] = {'billable': False, 'name': 'Arrive'}
+		data['projects']['1'] = {'billable': False, 'name': 'Break'}
+		data['records'] = {}
+		data['version'] = 0
+		data['recordHoursPath'] = ''
+		data.update(serialData)
+
+		dailyHours = float(data['dailyHours'])
+		projects = []
+		projectMap = {}
+		for chargeNumberStr, projectAttr in sorted(data['projects'].items()):
+			chargeNumber = int(chargeNumberStr)
+			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'])
+			projects.append(project)
+			if chargeNumber == 0:
+				arriveProject = project
+			projectMap[chargeNumber] = project
+		
+		timeRecord = {}
+		prevTime = dt.datetime.fromtimestamp(0)
+		for dateStr, records in sorted(data['records'].items()):
+			date = dt.datetime.strptime(dateStr, '%Y-%m-%d').date()
+			timeRecord[date] = {}
+			for time, chargeNumber in sorted(records.items()):
+				project = projectMap[chargeNumber]
+				dtTime = dt.datetime.fromtimestamp(float(time))
+				timeRecord[date][dtTime] = project
+				if chargeNumber != 0:
+					project.addHours(dtTime - prevTime, date)
+				prevTime = dtTime
+				prevTime = max(prevTime, prevTime)
+		recordHoursPath = data['recordHoursPath']
+		return {'dailyHours':dailyHours, 
+				'projects':projects, 
+				'timeRecord':timeRecord, 
+				'prevTime':prevTime, 
+				'arriveProject':arriveProject,
+				'recordHoursPath':recordHoursPath}
+
+	@classmethod
+	def toDict(self, **kwargs):
+		dailyHours = kwargs['dailyHours']
+		projects = kwargs['projects']
+		timeRecord = kwargs['timeRecord']
+		recordHoursPath = kwargs['recordHoursPath']
+		data = {}
+		data['projects'] = {}
+		for project in projects:
+			data['projects'][project.chargeNumber] = {'name': project.name, 
+				'billable': project.isBillable}
+
+		data['records'] = {}
+		for date, records in timeRecord.items():
+			data['records'][date.isoformat()] = {}
+			for time, project in records.items():
+				data['records'][date.isoformat()][dt.datetime.timestamp(time)] = project.chargeNumber
+		data['dailyHours'] = dailyHours
+		data['recordHoursPath'] = recordHoursPath
+		data['version'] = 1.1
+		return data
+
+	@classmethod
+	def version(self):
+		return 1.1

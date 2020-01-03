@@ -12,6 +12,8 @@ import tkcalendar as tkc
 from tkinter import messagebox as tkMessageBox
 import operator
 import dataStore
+import subprocess
+import shlex
 
 test = True
 
@@ -65,11 +67,18 @@ class HourTracker():
                 data = json.load(file)
         else:
             data = {}
-        self.dailyHours, self.projects, self.timeRecord, self.prevTime, \
-            self.arriveProject = dataStore.fromDict(data)
+        data = dataStore.fromDict(data)
+        self.dailyHours = data['dailyHours']
+        self.projects = data['projects']
+        self.timeRecord = data['timeRecord']
+        self.prevTime = data['prevTime']
+        self.arriveProject = data['arriveProject']
+        self.recordHoursPath = data['recordHoursPath']
 
     def __exit__(self, exc_type, exc_value, tbk):
-        data = dataStore.toDict(self.dailyHours, self.projects, self.timeRecord)
+        data = dataStore.toDict(dailyHours=self.dailyHours, 
+            projects=self.projects, timeRecord=self.timeRecord, 
+            recordHoursPath=self.recordHoursPath)
         with open(self.path, 'w') as file:
             json.dump(data, file, indent=4, sort_keys=True)
 
@@ -80,7 +89,8 @@ class HourTracker():
         self.addHoursCallback.append(func)
 
     def getProjectNames(self):
-        return {project.name:project for project in self.projects if project.chargeNumber > 0}
+        return {project.name:project for project in self.projects \
+            if project.chargeNumber > 0}
 
     def addProject(self, project):
         self.projects.append(project)
@@ -106,9 +116,11 @@ class HourTracker():
         startTime = sorted(self.timeRecord[time.date()].keys())[0]
         for endTime in sorted(self.timeRecord[time.date()].keys())[1:]:
             if self.timeRecord[time.date()][endTime] not in timeRef:
-                timeRef[self.timeRecord[time.date()][endTime]] = endTime - startTime
+                timeRef[self.timeRecord[time.date()][endTime]] = endTime - \
+                    startTime
             else:
-                timeRef[self.timeRecord[time.date()][endTime]] += endTime - startTime
+                timeRef[self.timeRecord[time.date()][endTime]] += endTime - \
+                    startTime
             startTime = endTime
         for proj, tDelta in timeRef.items():
             proj.setHours(tDelta, time.date())
@@ -138,8 +150,12 @@ class HourTracker():
 
     def getEarliestReleaseTime(self):
         if self.prevTime.date() != dt.datetime.now().date():
-            return dt.datetime.now() + dt.timedelta(hours=self.getTodayRemainingHours()) - dt.timedelta(minutes=7.5)
-        return self.prevTime + dt.timedelta(hours=self.getTodayRemainingHours()) - dt.timedelta(minutes=7.5)
+            return dt.datetime.now() + \
+                dt.timedelta(hours=self.getTodayRemainingHours()) - \
+                dt.timedelta(minutes=7.5)
+        return self.prevTime + \
+            dt.timedelta(hours=self.getTodayRemainingHours()) - \
+            dt.timedelta(minutes=7.5)
 
     def getHours(self, date):
         retval = {}
@@ -165,7 +181,8 @@ class HourTrackerViewer(tk.Frame):
             self.innerFrame.destroy()
         self.innerFrame = tk.Frame(self)
         self.dateSelector = tk.StringVar()
-        dateEntry = tkc.DateEntry(self.innerFrame, textvariable=self.dateSelector, maxdate=dt.datetime.today())
+        dateEntry = tkc.DateEntry(self.innerFrame, 
+            textvariable=self.dateSelector, maxdate=dt.datetime.today())
         dateEntry.grid(row=0, column=0, columnspan=2)
         dateEntry.bind('<<DateEntrySelected>>', self.setDate)
 
@@ -174,12 +191,16 @@ class HourTrackerViewer(tk.Frame):
 
         self.projectSelector = tk.StringVar()
         self.nameMap = self.hourTracker.getProjectNames()
-        self.projectNames = [project.name for project in sorted(self.nameMap.values(), key=operator.attrgetter('chargeNumber'))]
+        self.projectNames = [project.name for project \
+            in sorted(self.nameMap.values(), 
+                key=operator.attrgetter('chargeNumber'))]
         if len(self.nameMap) > 0:
             self.projectSelector.set(self.projectNames[self.projectNameIdx])
 
-        tk.OptionMenu(self.innerFrame, self.projectSelector, *tuple(self.projectNames)).grid(row=2, column=0)
-        button = tk.Button(self.innerFrame, text='Record', command=self.recordActivity)
+        tk.OptionMenu(self.innerFrame, self.projectSelector, 
+            *tuple(self.projectNames)).grid(row=2, column=0)
+        button = tk.Button(self.innerFrame, text='Record', 
+            command=self.recordActivity)
         button.grid(row=2, column=1)
         button.bind("<Up>", self.__changeProjectUp)
         button.bind("<Down>", self.__changeProjectDown)
@@ -307,7 +328,9 @@ class TimeEditor(tk.Toplevel):
         self.minSelector = tk.StringVar()
         self.minSelector.set(dt.datetime.now().minute)
         self.projectSelector = tk.StringVar()
-        self.projectNames = [project.name for project in sorted(self.projects.values(), key=operator.attrgetter('chargeNumber'))]
+        self.projectNames = [project.name for project \
+            in sorted(self.projects.values(), 
+                key=operator.attrgetter('chargeNumber'))]
         self.projectNameIdx = 0
         self.initial_focus = self.create(body)
         body.grid(row=0, column=0, padx=5, pady=5)
@@ -387,31 +410,14 @@ class ChargeNumberTrackerApp:
         elif self.platform == 'Darwin':
             self.dataPath = os.path.expanduser(os.path.join('~', '.chargeNumber'))
         elif self.platform == 'Windows':
-            self.dataPath = os.path.expanduser(os.path.join('~', 'Appdata', 'Roaming', 'chargeNumber'))
+            self.dataPath = os.path.expanduser(os.path.join('~', 'Appdata', 
+                'Roaming', 'chargeNumber'))
         else:
             raise RuntimeError("Unknown Platform!")
         if not os.path.isdir(self.dataPath):
             os.mkdir(self.dataPath)
 
         self.tracker = HourTracker(self.dataPath)
-
-        self.master = tk.Tk()
-        self.master.protocol("WM_DELETE_WINDOW", self.destroy)
-
-        self.master.title('Charge Number Hour Tracker')
-
-        def createMenu():
-            menubar = tk.Menu(self.master)
-            filemenu = tk.Menu(menubar, tearoff=0)
-            filemenu.add_command(label='Arrive', command=self.arrive)
-            filemenu.add_command(label='Get Hours', command=self.getHours)
-            filemenu.add_command(label='Record Custom...', 
-                command=self.recordCustom)
-            filemenu.add_separator()
-            filemenu.add_command(label='Exit', command=self.destroy)
-            menubar.add_cascade(label="File", menu=filemenu)
-            self.master.config(menu=menubar)
-        createMenu()
 
         try:
             self.tracker.__enter__()
@@ -426,12 +432,40 @@ class ChargeNumberTrackerApp:
             else:
                 return
 
+        self.master = tk.Tk()
+        self.master.protocol("WM_DELETE_WINDOW", self.destroy)
+
+        self.master.title('Charge Number Hour Tracker')
+
+        def createMenu():
+            menubar = tk.Menu(self.master)
+            filemenu = tk.Menu(menubar, tearoff=0)
+            filemenu.add_command(label='Arrive', command=self.arrive)
+            filemenu.add_command(label='Get Hours', command=self.getHours)
+            filemenu.add_command(label='Record Custom...', 
+                command=self.recordCustom)
+            filemenu.add_separator()
+            filemenu.add_command(label='Log Hours', command=self.logHours, 
+                state= ("disabled" if self.tracker.recordHoursPath is "" else "normal"))
+            filemenu.add_separator()
+            filemenu.add_command(label='Exit', command=self.destroy)
+            menubar.add_cascade(label="File", menu=filemenu)
+            self.master.config(menu=menubar)
+        createMenu()
+
+
         self.htViewer = HourTrackerViewer(self.master, self.tracker)
         self.htViewer.grid(row=0, column=0, sticky=tk.NW)
         ProjectList(self.master, self.tracker).grid(row=0, column=1, sticky=tk.NW)
 
         self.master.bind('<Control-Shift-S>', self.arrive)
         self.master.mainloop()
+
+    def logHours(self):
+        excPath = self.tracker.recordHoursPath
+        if excPath is not "":
+            print(excPath)
+            subprocess.Popen(shlex.split(excPath))
 
     def arrive(self, *args):
         self.tracker.recordArrive()
