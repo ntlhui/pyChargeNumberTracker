@@ -76,11 +76,16 @@ class HourTracker():
         self.recordHoursPath = data['recordHoursPath']
 
     def __exit__(self, exc_type, exc_value, tbk):
+        self.flush()
+
+    def flush(self):
         data = dataStore.toDict(dailyHours=self.dailyHours, 
             projects=self.projects, timeRecord=self.timeRecord, 
             recordHoursPath=self.recordHoursPath)
         with open(self.path, 'w') as file:
             json.dump(data, file, indent=4, sort_keys=True)
+    
+
 
     def registerAddProjectCallback(self, func):
         self.addProjectCallback.append(func)
@@ -107,6 +112,7 @@ class HourTracker():
         self.__today()[self.start] = self.arriveProject
         for func in self.addHoursCallback:
             func(self.arriveProject)
+        self.flush()
 
     def addRecord(self, time, project):
         self.timeRecord[time.date()][time] = project
@@ -128,6 +134,7 @@ class HourTracker():
             self.prevTime = time
         for func in self.addHoursCallback:
             func(project)
+        self.flush()
 
     def recordHours(self, project):
         time = dt.datetime.now()
@@ -136,6 +143,7 @@ class HourTracker():
         self.prevTime = time
         for func in self.addHoursCallback:
             func(project)
+        self.flush()
 
     def getTodayTotalHours(self):
         date = dt.datetime.now().date()
