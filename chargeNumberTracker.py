@@ -14,6 +14,7 @@ import operator
 import dataStore
 import subprocess
 import shlex
+import platform
 
 test = True
 
@@ -472,8 +473,11 @@ class ChargeNumberTrackerApp:
     def logHours(self):
         excPath = self.tracker.recordHoursPath
         if excPath is not "":
-            print(excPath)
-            subprocess.Popen(shlex.split(excPath))
+            if platform.system() == 'Linux':
+                subprocess.Popen(shlex.split(excPath))
+            elif platform.system() == 'Windows':
+                subprocess.Popen(shlex.split(excPath, posix=False))
+
 
     def arrive(self, *args):
         self.tracker.recordArrive()
