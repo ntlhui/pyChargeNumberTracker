@@ -155,23 +155,7 @@ class v1_0(BaseVersion):
 
 	@classmethod
 	def toDict(self, **kwargs):
-		dailyHours = kwargs['dailyHours']
-		projects = kwargs['projects']
-		timeRecord = kwargs['timeRecord']
-		data = {}
-		data['projects'] = {}
-		for project in projects:
-			data['projects'][project.chargeNumber] = {'name': project.name, 
-				'billable': project.isBillable}
-
-		data['records'] = {}
-		for date, records in timeRecord.items():
-			data['records'][date.isoformat()] = {}
-			for time, project in records.items():
-				data['records'][date.isoformat()][dt.datetime.timestamp(time)] = project.chargeNumber
-		data['dailyHours'] = dailyHours
-		data['version'] = 1.0
-		return data
+		raise NotImplementedError()
 
 	@classmethod
 	def version(self):
@@ -230,25 +214,7 @@ class v1_1(BaseVersion):
 
 	@classmethod
 	def toDict(self, **kwargs):
-		dailyHours = kwargs['dailyHours']
-		projects = kwargs['projects']
-		timeRecord = kwargs['timeRecord']
-		recordHoursPath = kwargs['recordHoursPath']
-		data = {}
-		data['projects'] = {}
-		for project in projects:
-			data['projects'][project.chargeNumber] = {'name': project.name, 
-				'billable': project.isBillable}
-
-		data['records'] = {}
-		for date, records in timeRecord.items():
-			data['records'][date.isoformat()] = {}
-			for time, project in records.items():
-				data['records'][date.isoformat()][dt.datetime.timestamp(time)] = project.chargeNumber
-		data['dailyHours'] = dailyHours
-		data['recordHoursPath'] = recordHoursPath
-		data['version'] = 1.1
-		return data
+		raise NotImplementedError()
 
 	@classmethod
 	def version(self):
