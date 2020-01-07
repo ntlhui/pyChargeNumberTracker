@@ -15,7 +15,7 @@ import dataStore
 import subprocess
 import shlex
 import platform
-
+from tkinter import filedialog as tkf
 test = True
 
 class Project():
@@ -315,6 +315,89 @@ class ProjectList(tk.Frame):
         self.chargeNumberEntry.set('')
         self.createWidget()
 
+class SettingsDialog(tk.Toplevel):
+    def __init__(self, parent, hour_tracker):
+        tk.Toplevel.__init__(self, parent)
+        self.transient(parent)
+        self.title("Settings")
+        self.parent = parent
+        self.hour_tracker = hour_tracker
+
+        self.recordHoursPath = tk.StringVar()
+        self.recordHoursPath.set(self.hour_tracker.recordHoursPath)
+        
+        self.bodyFrame = None
+        self.initial_focus = self.createBody()
+
+        self.acceptFrame = None
+        self.createAcceptFrame()
+
+        self.grab_set()
+
+        if not self.initial_focus:
+            self.initial_focus = self
+
+        self.protocol("WM_DELETE_WINDOW", self.cancel)
+
+        self.geometry("+%d+%d" % (parent.winfo_rootx()+50,
+                                  parent.winfo_rooty()+50))
+
+        self.initial_focus.focus_set()
+
+        self.wait_window(self)
+
+    def createBody(self):
+        if self.bodyFrame is not None:
+            self.bodyFrame.destroy()
+        self.bodyFrame = tk.Frame(self)
+        tk.Label(self.bodyFrame, text="Hour Log App:").grid(row=0, column=0)
+        entry = tk.Entry(self.bodyFrame, textvariable=self.recordHoursPath).grid(row=0, column=1)
+        tk.Button(self.bodyFrame, text='...', command=self.getRecordHoursPath).grid(row=0, column=2)
+
+        self.bodyFrame.grid(row=0, column=0)
+
+    def getRecordHoursPath(self):
+        if self.recordHoursPath.get() is "":
+            if platform.system() == "Linux":
+                init_path = "/usr/local/bin"
+            else:
+                init_path = "C:\\Program Files"
+        else:
+            init_path = os.path.dirname(self.recordHoursPath.get())
+        newPath = tkf.askopenfilename(initialdir=init_path, parent=self)
+        self.recordHoursPath.set(newPath)
+
+    def createAcceptFrame(self):
+        if self.acceptFrame is not None:
+            self.acceptFrame.destroy()
+        self.acceptFrame = tk.Frame(self)
+        tk.Button(self.acceptFrame, text="OK", command=self.ok).grid(row=0, column=0)
+        tk.Button(self.acceptFrame, text='Cancel', command=self.cancel).grid(row=0, column=1)
+        self.acceptFrame.grid(row=1, column=0)
+
+    def cancel(self, event=None):
+        self.parent.focus_set()
+        self.destroy()
+
+    def validate(self):
+        try:
+            assert(os.path.isfile(self.recordHoursPath.get()))
+            return True
+        except:
+            return False
+
+    def ok(self, event=None):
+        if not self.validate():
+            return
+        self.withdraw()
+        self.update_idletasks()
+
+        # apply changes
+        self.hour_tracker.recordHoursPath = self.recordHoursPath.get()
+
+        self.cancel()
+
+
 class TimeEditor(tk.Toplevel):
     def __init__(self, parent, projects, title=None):
         tk.Toplevel.__init__(self,  parent)
@@ -357,7 +440,6 @@ class TimeEditor(tk.Toplevel):
         buttonbox.grid(row=1, column=0)
 
 
-        self.grab_set()
 
         if not self.initial_focus:
             self.initial_focus = self
@@ -368,6 +450,7 @@ class TimeEditor(tk.Toplevel):
                                   parent.winfo_rooty()+50))
 
         self.initial_focus.focus_set()
+        self.grab_set()
 
         self.wait_window(self)
 
@@ -454,6 +537,8 @@ class ChargeNumberTrackerApp:
             filemenu.add_command(label='Record Custom...', 
                 command=self.recordCustom)
             filemenu.add_separator()
+            filemenu.add_command(label='Preferences', command=self.setPrefs)
+            filemenu.add_separator()
             filemenu.add_command(label='Log Hours', command=self.logHours, 
                 state= ("disabled" if self.tracker.recordHoursPath is "" else "normal"))
             filemenu.add_separator()
@@ -492,8 +577,12 @@ class ChargeNumberTrackerApp:
 
     def recordCustom(self):
         d = TimeEditor(self.master, self.tracker.getProjectNames())
-        self.tracker.addRecord(*d.result)
-        self.htViewer.update()
+        if d.result:
+            self.tracker.addRecord(*d.result)
+            self.htViewer.update()
+
+    def setPrefs(self):
+        d = SettingsDialog(self.master, self.tracker)
 
 if __name__ == '__main__':
     root = ChargeNumberTrackerApp()
