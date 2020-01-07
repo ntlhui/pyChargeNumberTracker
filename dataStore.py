@@ -34,6 +34,8 @@ inDictKeys = ['dailyHours',
 				'timeRecord', 
 				'recordHoursPath']
 
+defaultProj = {'billable': True, 'sort': 0}
+
 class BaseVersion(ABC):
 	@classmethod
 	@abstractmethod
@@ -67,9 +69,12 @@ class v0_0(BaseVersion):
 		dailyHours = float(data['dailyHours'])
 		projects = []
 		projectMap = {}
-		for chargeNumberStr, projectAttr in sorted(data['projects'].items()):
+		for chargeNumberStr, localAttr in sorted(data['projects'].items()):
 			chargeNumber = (chargeNumberStr)
-			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'])
+			projectAttr = defaultProj.copy()
+			projectAttr['sort'] = int(chargeNumberStr)
+			projectAttr.update(localAttr)
+			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'], sortIdx = projectAttr['sort'])
 			projects.append(project)
 			if chargeNumber == 0:
 				arriveProject = project
@@ -115,8 +120,8 @@ class v1_0(BaseVersion):
 		data = {}
 		data['dailyHours'] = 8.0
 		data['projects'] = {}
-		data['projects']['0'] = {'billable': False, 'name': 'Arrive'}
-		data['projects']['1'] = {'billable': False, 'name': 'Break'}
+		data['projects']['0'] = {'billable': False, 'name': 'Arrive', 'sort': 0}
+		data['projects']['1'] = {'billable': False, 'name': 'Break', 'sort': 1}
 		data['records'] = {}
 		data['version'] = 0
 		data['recordHoursPath'] = ''
@@ -125,9 +130,12 @@ class v1_0(BaseVersion):
 		dailyHours = float(data['dailyHours'])
 		projects = []
 		projectMap = {}
-		for chargeNumberStr, projectAttr in sorted(data['projects'].items()):
+		for chargeNumberStr, localAttr in sorted(data['projects'].items()):
 			chargeNumber = (chargeNumberStr)
-			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'])
+			projectAttr = defaultProj.copy()
+			projectAttr['sort'] = int(chargeNumberStr)
+			projectAttr.update(localAttr)
+			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'], sortIdx=projectAttr['sort'])
 			projects.append(project)
 			if chargeNumber == 0:
 				arriveProject = project
@@ -173,8 +181,8 @@ class v1_1(BaseVersion):
 		data = {}
 		data['dailyHours'] = 8.0
 		data['projects'] = {}
-		data['projects']['0'] = {'billable': False, 'name': 'Arrive'}
-		data['projects']['1'] = {'billable': False, 'name': 'Break'}
+		data['projects']['0'] = {'billable': False, 'name': 'Arrive', 'sort': 0}
+		data['projects']['1'] = {'billable': False, 'name': 'Break', 'sort': 1}
 		data['records'] = {}
 		data['version'] = 0
 		data['recordHoursPath'] = ''
@@ -183,9 +191,12 @@ class v1_1(BaseVersion):
 		dailyHours = float(data['dailyHours'])
 		projects = []
 		projectMap = {}
-		for chargeNumberStr, projectAttr in sorted(data['projects'].items()):
+		for chargeNumberStr, localAttr in sorted(data['projects'].items()):
 			chargeNumber = (chargeNumberStr)
-			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'])
+			projectAttr = defaultProj.copy()
+			projectAttr['sort'] = int(chargeNumberStr)
+			projectAttr.update(localAttr)
+			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'], sortIdx = projectAttr['sort'])
 			projects.append(project)
 			if chargeNumber == "0":
 				arriveProject = project
@@ -232,8 +243,8 @@ class v1_2(BaseVersion):
 		data = {}
 		data['dailyHours'] = 8.0
 		data['projects'] = {}
-		data['projects']['0'] = {'billable': False, 'name': 'Arrive'}
-		data['projects']['1'] = {'billable': False, 'name': 'Break'}
+		data['projects']['0'] = {'billable': False, 'name': 'Arrive', 'sort': 0}
+		data['projects']['1'] = {'billable': False, 'name': 'Break', 'sort': 1}
 		data['records'] = {}
 		data['version'] = 0
 		data['recordHoursPath'] = ''
@@ -242,9 +253,11 @@ class v1_2(BaseVersion):
 		dailyHours = float(data['dailyHours'])
 		projects = []
 		projectMap = {}
-		for chargeNumberStr, projectAttr in sorted(data['projects'].items()):
+		for chargeNumberStr, localAttr in sorted(data['projects'].items()):
 			chargeNumber = (chargeNumberStr)
-			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'])
+			projectAttr = defaultProj.copy()
+			projectAttr.update(localAttr)
+			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'], sortIdx = projectAttr['sort'])
 			projects.append(project)
 			if chargeNumber == "0":
 				arriveProject = project
@@ -281,7 +294,7 @@ class v1_2(BaseVersion):
 		data['projects'] = {}
 		for project in projects:
 			data['projects'][project.chargeNumber] = {'name': project.name, 
-				'billable': project.isBillable}
+				'billable': project.isBillable, 'sort': project.sortIdx}
 
 		data['records'] = {}
 		for date, records in timeRecord.items():

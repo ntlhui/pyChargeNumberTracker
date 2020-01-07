@@ -20,11 +20,15 @@ import traceback
 test = True
 
 class Project():
-    def __init__(self, name, chargeNumber, isBillable):
+    def __init__(self, name, chargeNumber, isBillable, sortIdx = -1):
         self.name = name
         self.chargeNumber = chargeNumber
         self.hours = {}
         self.isBillable = isBillable
+        if sortIdx == -1:
+            self.sortIdx = 999
+        else:
+            self.sortIdx = sortIdx
 
     def addHours(self, hours, date):
         assert(isinstance(hours, float) or isinstance(hours, dt.timedelta))
@@ -203,7 +207,7 @@ class HourTrackerViewer(tk.Frame):
         self.nameMap = self.hourTracker.getProjectNames()
         self.projectNames = [project.name for project \
             in sorted(self.nameMap.values(), 
-                key=operator.attrgetter('chargeNumber'))]
+                key=operator.attrgetter('sortIdx'))]
         if len(self.nameMap) > 0:
             self.projectSelector.set(self.projectNames[self.projectNameIdx])
 
@@ -280,7 +284,7 @@ class ProjectList(tk.Frame):
 
         row = 0
         today = dt.datetime.today().date()
-        for project in sorted(self.hourTracker.projects, key=operator.attrgetter('chargeNumber')):
+        for project in sorted(self.hourTracker.projects, key=operator.attrgetter('sortIdx')):
             if project.chargeNumber != "0":
                 tk.Label(self.innerFrame, text=project.name, anchor=tk.NW).grid(row=row, column=0)
                 tk.Label(self.innerFrame, text='%s' % (project.chargeNumber), anchor=tk.NW).grid(row=row, column=1)
@@ -531,25 +535,9 @@ class ChargeNumberTrackerApp:
         self.master.protocol("WM_DELETE_WINDOW", self.destroy)
 
         self.master.title('Charge Number Hour Tracker')
+        self.menubar = None
 
-        def createMenu():
-            menubar = tk.Menu(self.master)
-            filemenu = tk.Menu(menubar, tearoff=0)
-            filemenu.add_command(label='Arrive', command=self.arrive)
-            filemenu.add_command(label='Get Hours', command=self.getHours)
-            filemenu.add_command(label='Record Custom...', 
-                command=self.recordCustom)
-            filemenu.add_separator()
-            filemenu.add_command(label='Preferences', command=self.setPrefs)
-            filemenu.add_separator()
-            filemenu.add_command(label='Log Hours', command=self.logHours, 
-                state= ("disabled" if self.tracker.recordHoursPath is "" else "normal"))
-            filemenu.add_separator()
-            filemenu.add_command(label='Exit', command=self.destroy)
-            menubar.add_cascade(label="File", menu=filemenu)
-            self.master.config(menu=menubar)
-        createMenu()
-
+        self.createMenu()
 
         self.htViewer = HourTrackerViewer(self.master, self.tracker)
         self.htViewer.grid(row=0, column=0, sticky=tk.NW)
@@ -557,6 +545,24 @@ class ChargeNumberTrackerApp:
 
         self.master.bind('<Control-Shift-S>', self.arrive)
         self.master.mainloop()
+    def createMenu(self):
+        if self.menubar:
+            self.menubar.destroy()
+        self.menubar = tk.Menu(self.master)
+        filemenu = tk.Menu(self.menubar, tearoff=0)
+        filemenu.add_command(label='Arrive', command=self.arrive)
+        filemenu.add_command(label='Get Hours', command=self.getHours)
+        filemenu.add_command(label='Record Custom...', 
+            command=self.recordCustom)
+        filemenu.add_separator()
+        filemenu.add_command(label='Preferences', command=self.setPrefs)
+        filemenu.add_separator()
+        filemenu.add_command(label='Log Hours', command=self.logHours, 
+            state= ("disabled" if self.tracker.recordHoursPath is "" else "normal"))
+        filemenu.add_separator()
+        filemenu.add_command(label='Exit', command=self.destroy)
+        self.menubar.add_cascade(label="File", menu=filemenu)
+        self.master.config(menu=self.menubar)
 
     def logHours(self):
         excPath = self.tracker.recordHoursPath
@@ -586,6 +592,7 @@ class ChargeNumberTrackerApp:
 
     def setPrefs(self):
         d = SettingsDialog(self.master, self.tracker)
+        self.createMenu()
 
 if __name__ == '__main__':
     root = ChargeNumberTrackerApp()
