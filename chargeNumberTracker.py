@@ -16,6 +16,7 @@ import subprocess
 import shlex
 import platform
 from tkinter import filedialog as tkf
+import traceback
 test = True
 
 class Project():
@@ -96,7 +97,7 @@ class HourTracker():
 
     def getProjectNames(self):
         return {project.name:project for project in self.projects \
-            if project.chargeNumber > 0}
+            if project.chargeNumber != "0"}
 
     def addProject(self, project):
         self.projects.append(project)
@@ -280,7 +281,7 @@ class ProjectList(tk.Frame):
         row = 0
         today = dt.datetime.today().date()
         for project in sorted(self.hourTracker.projects, key=operator.attrgetter('chargeNumber')):
-            if project.chargeNumber > 0:
+            if project.chargeNumber != "0":
                 tk.Label(self.innerFrame, text=project.name, anchor=tk.NW).grid(row=row, column=0)
                 tk.Label(self.innerFrame, text='%s' % (project.chargeNumber), anchor=tk.NW).grid(row=row, column=1)
 
@@ -353,6 +354,7 @@ class SettingsDialog(tk.Toplevel):
         tk.Label(self.bodyFrame, text="Hour Log App:").grid(row=0, column=0)
         entry = tk.Entry(self.bodyFrame, textvariable=self.recordHoursPath).grid(row=0, column=1)
         tk.Button(self.bodyFrame, text='...', command=self.getRecordHoursPath).grid(row=0, column=2)
+
 
         self.bodyFrame.grid(row=0, column=0)
 
@@ -513,7 +515,8 @@ class ChargeNumberTrackerApp:
 
         try:
             self.tracker.__enter__()
-        except:
+        except Exception as e:
+            print(traceback.print_last())
             if tkMessageBox.askyesno("Charge Number Hour Tracker", "Failed to "
                 "load data - would you like to delete the old data?"):
                 try:

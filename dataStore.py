@@ -68,7 +68,7 @@ class v0_0(BaseVersion):
 		projects = []
 		projectMap = {}
 		for chargeNumberStr, projectAttr in sorted(data['projects'].items()):
-			chargeNumber = int(chargeNumberStr)
+			chargeNumber = (chargeNumberStr)
 			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'])
 			projects.append(project)
 			if chargeNumber == 0:
@@ -81,7 +81,7 @@ class v0_0(BaseVersion):
 			date = dt.datetime.strptime(dateStr, '%Y-%m-%d').date()
 			timeRecord[date] = {}
 			for time, chargeNumber in sorted(records.items()):
-				project = projectMap[chargeNumber]
+				project = projectMap[str(chargeNumber)]
 				dtTime = dt.datetime.fromtimestamp(float(time))
 				timeRecord[date][dtTime] = project
 				if chargeNumber != 0:
@@ -126,7 +126,7 @@ class v1_0(BaseVersion):
 		projects = []
 		projectMap = {}
 		for chargeNumberStr, projectAttr in sorted(data['projects'].items()):
-			chargeNumber = int(chargeNumberStr)
+			chargeNumber = (chargeNumberStr)
 			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'])
 			projects.append(project)
 			if chargeNumber == 0:
@@ -139,7 +139,7 @@ class v1_0(BaseVersion):
 			date = dt.datetime.strptime(dateStr, '%Y-%m-%d').date()
 			timeRecord[date] = {}
 			for time, chargeNumber in sorted(records.items()):
-				project = projectMap[chargeNumber]
+				project = projectMap[str(chargeNumber)]
 				dtTime = dt.datetime.fromtimestamp(float(time))
 				timeRecord[date][dtTime] = project
 				if chargeNumber != 0:
@@ -200,10 +200,10 @@ class v1_1(BaseVersion):
 		projects = []
 		projectMap = {}
 		for chargeNumberStr, projectAttr in sorted(data['projects'].items()):
-			chargeNumber = int(chargeNumberStr)
+			chargeNumber = (chargeNumberStr)
 			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'])
 			projects.append(project)
-			if chargeNumber == 0:
+			if chargeNumber == "0":
 				arriveProject = project
 			projectMap[chargeNumber] = project
 		
@@ -213,10 +213,10 @@ class v1_1(BaseVersion):
 			date = dt.datetime.strptime(dateStr, '%Y-%m-%d').date()
 			timeRecord[date] = {}
 			for time, chargeNumber in sorted(records.items()):
-				project = projectMap[chargeNumber]
+				project = projectMap[str(chargeNumber)]
 				dtTime = dt.datetime.fromtimestamp(float(time))
 				timeRecord[date][dtTime] = project
-				if chargeNumber != 0:
+				if chargeNumber != "0":
 					project.addHours(dtTime - prevTime, date)
 				prevTime = dtTime
 				prevTime = max(prevTime, prevTime)
@@ -253,3 +253,80 @@ class v1_1(BaseVersion):
 	@classmethod
 	def version(self):
 		return 1.1
+
+class v1_2(BaseVersion):
+	@classmethod
+	def fromDict(self, serialData):
+		assert(isinstance(serialData, dict))
+		assert('version' in serialData)
+		assert(float(serialData['version']) == 1.2)
+		assert('records' in serialData)
+		assert('projects' in serialData)
+		assert('dailyHours' in serialData)
+		data = {}
+		data['dailyHours'] = 8.0
+		data['projects'] = {}
+		data['projects']['0'] = {'billable': False, 'name': 'Arrive'}
+		data['projects']['1'] = {'billable': False, 'name': 'Break'}
+		data['records'] = {}
+		data['version'] = 0
+		data['recordHoursPath'] = ''
+		data.update(serialData)
+
+		dailyHours = float(data['dailyHours'])
+		projects = []
+		projectMap = {}
+		for chargeNumberStr, projectAttr in sorted(data['projects'].items()):
+			chargeNumber = (chargeNumberStr)
+			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'])
+			projects.append(project)
+			if chargeNumber == "0":
+				arriveProject = project
+			projectMap[chargeNumber] = project
+		
+		timeRecord = {}
+		prevTime = dt.datetime.fromtimestamp(0)
+		for dateStr, records in sorted(data['records'].items()):
+			date = dt.datetime.strptime(dateStr, '%Y-%m-%d').date()
+			timeRecord[date] = {}
+			for time, chargeNumber in sorted(records.items()):
+				project = projectMap[str(chargeNumber)]
+				dtTime = dt.datetime.fromtimestamp(float(time))
+				timeRecord[date][dtTime] = project
+				if chargeNumber != "0":
+					project.addHours(dtTime - prevTime, date)
+				prevTime = dtTime
+				prevTime = max(prevTime, prevTime)
+		recordHoursPath = data['recordHoursPath']
+		return {'dailyHours':dailyHours, 
+				'projects':projects, 
+				'timeRecord':timeRecord, 
+				'prevTime':prevTime, 
+				'arriveProject':arriveProject,
+				'recordHoursPath':recordHoursPath}
+
+	@classmethod
+	def toDict(self, **kwargs):
+		dailyHours = kwargs['dailyHours']
+		projects = kwargs['projects']
+		timeRecord = kwargs['timeRecord']
+		recordHoursPath = kwargs['recordHoursPath']
+		data = {}
+		data['projects'] = {}
+		for project in projects:
+			data['projects'][project.chargeNumber] = {'name': project.name, 
+				'billable': project.isBillable}
+
+		data['records'] = {}
+		for date, records in timeRecord.items():
+			data['records'][date.isoformat()] = {}
+			for time, project in records.items():
+				data['records'][date.isoformat()][dt.datetime.timestamp(time)] = project.chargeNumber
+		data['dailyHours'] = dailyHours
+		data['recordHoursPath'] = recordHoursPath
+		data['version'] = 1.2
+		return data
+
+	@classmethod
+	def version(self):
+		return 1.2
