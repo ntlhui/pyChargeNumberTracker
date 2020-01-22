@@ -17,10 +17,14 @@ import shlex
 import platform
 from tkinter import filedialog as tkf
 import traceback
+import glob
+from math import inf
+
 test = True
 
+
 class Project():
-    def __init__(self, name, chargeNumber, isBillable, sortIdx = -1):
+    def __init__(self, name, chargeNumber, isBillable, sortIdx=-1):
         self.name = name
         self.chargeNumber = chargeNumber
         self.hours = {}
@@ -57,7 +61,10 @@ class Project():
     def __str__(self):
         return "{%s(%s): %s}" % (self.name, self.chargeNumber, self.hours)
 
+
 class HourTracker():
+    NUM_BACKUPS = 4
+
     def __init__(self, path):
         self.path = os.path.join(path, 'data.json')
         self.start = None
@@ -85,13 +92,21 @@ class HourTracker():
         self.flush()
 
     def flush(self):
-        data = dataStore.toDict(dailyHours=self.dailyHours, 
-            projects=self.projects, timeRecord=self.timeRecord, 
-            recordHoursPath=self.recordHoursPath)
+        data = dataStore.toDict(dailyHours=self.dailyHours,
+                                projects=self.projects, timeRecord=self.timeRecord,
+                                recordHoursPath=self.recordHoursPath)
+        existingBackups = glob.glob("%s.*" % (self.path))
+        existingBackupNums = [(backup, int(os.path.basename(
+            backup).split('.json.')[1])) for backup in existingBackups]
+        print(existingBackups)
+        if len(existingBackups) >= self.NUM_BACKUPS:
+            os.remove(existingBackupNums[-1][0])
+            existingBackupNums = existingBackupNums[0:-1]
+        for backup, number in sorted(existingBackupNums, reverse=True, key=lambda x: x[1]):
+            os.rename(backup, "%s.%d" % (self.path, number + 1))
+        os.rename(self.path, "%s.%d" % (self.path, 0))
         with open(self.path, 'w') as file:
             json.dump(data, file, indent=4, sort_keys=True)
-    
-
 
     def registerAddProjectCallback(self, func):
         self.addProjectCallback.append(func)
@@ -100,8 +115,8 @@ class HourTracker():
         self.addHoursCallback.append(func)
 
     def getProjectNames(self):
-        return {project.name:project for project in self.projects \
-            if project.chargeNumber != "0"}
+        return {project.name: project for project in self.projects
+                if project.chargeNumber != "0"}
 
     def addProject(self, project):
         self.projects.append(project)
@@ -177,6 +192,7 @@ class HourTracker():
             retval[project.chargeNumber] = project.getBillableHours(date)
         return retval
 
+
 class HourTrackerViewer(tk.Frame):
     def __init__(self, master, hourTracker):
         self.hourTracker = hourTracker
@@ -189,14 +205,13 @@ class HourTrackerViewer(tk.Frame):
         self.__createWidget()
         self.hourTracker.registerAddProjectCallback(self.updateProject)
 
-
     def __createWidget(self):
         if self.innerFrame is not None:
             self.innerFrame.destroy()
         self.innerFrame = tk.Frame(self)
         self.dateSelector = tk.StringVar()
-        dateEntry = tkc.DateEntry(self.innerFrame, 
-            textvariable=self.dateSelector, maxdate=dt.datetime.today())
+        dateEntry = tkc.DateEntry(self.innerFrame,
+                                  textvariable=self.dateSelector, maxdate=dt.datetime.today())
         dateEntry.grid(row=0, column=0, columnspan=2)
         dateEntry.bind('<<DateEntrySelected>>', self.setDate)
 
@@ -205,16 +220,16 @@ class HourTrackerViewer(tk.Frame):
 
         self.projectSelector = tk.StringVar()
         self.nameMap = self.hourTracker.getProjectNames()
-        self.projectNames = [project.name for project \
-            in sorted(self.nameMap.values(), 
-                key=operator.attrgetter('sortIdx'))]
+        self.projectNames = [project.name for project
+                             in sorted(self.nameMap.values(),
+                                       key=operator.attrgetter('sortIdx'))]
         if len(self.nameMap) > 0:
             self.projectSelector.set(self.projectNames[self.projectNameIdx])
 
-        tk.OptionMenu(self.innerFrame, self.projectSelector, 
-            *tuple(self.projectNames)).grid(row=2, column=0)
-        button = tk.Button(self.innerFrame, text='Record', 
-            command=self.recordActivity)
+        tk.OptionMenu(self.innerFrame, self.projectSelector,
+                      *tuple(self.projectNames)).grid(row=2, column=0)
+        button = tk.Button(self.innerFrame, text='Record',
+                           command=self.recordActivity)
         button.grid(row=2, column=1)
         button.bind("<Up>", self.__changeProjectUp)
         button.bind("<Down>", self.__changeProjectDown)
@@ -245,7 +260,8 @@ class HourTrackerViewer(tk.Frame):
         try:
             self.hourTracker.recordHours(project)
         except KeyError:
-            tkMessageBox.showerror('Entry Error', 'Error: Start time not found!')
+            tkMessageBox.showerror(
+                'Entry Error', 'Error: Start time not found!')
             return
         self.projectSelector.set(self.projectNames[0])
         self.innerFrame.destroy()
@@ -260,10 +276,13 @@ class HourTrackerViewer(tk.Frame):
         if date in self.hourTracker.timeRecord:
             row = 0
             for record in sorted(self.hourTracker.timeRecord[date].items()):
-                tk.Label(self.recordFrame, text=record[0].strftime('%H:%M')).grid(row=row, column=0)
-                tk.Label(self.recordFrame, text=record[1].name).grid(row=row, column=1)
+                tk.Label(self.recordFrame, text=record[0].strftime(
+                    '%H:%M')).grid(row=row, column=0)
+                tk.Label(self.recordFrame, text=record[1].name).grid(
+                    row=row, column=1)
                 row += 1
         self.recordFrame.grid(row=1, column=0, columnspan=2)
+
 
 class ProjectList(tk.Frame):
     def __init__(self, master, hourTracker):
@@ -286,39 +305,48 @@ class ProjectList(tk.Frame):
         today = dt.datetime.today().date()
         for project in sorted(self.hourTracker.projects, key=operator.attrgetter('sortIdx')):
             if project.chargeNumber != "0":
-                tk.Label(self.innerFrame, text=project.name, anchor=tk.NW).grid(row=row, column=0)
-                tk.Label(self.innerFrame, text='%s' % (project.chargeNumber), anchor=tk.NW).grid(row=row, column=1)
+                tk.Label(self.innerFrame, text=project.name,
+                         anchor=tk.NW).grid(row=row, column=0)
+                tk.Label(self.innerFrame, text='%s' % (
+                    project.chargeNumber), anchor=tk.NW).grid(row=row, column=1)
 
                 billableHours = project.getBillableHours(today)
                 if billableHours > 0:
-                    tk.Label(self.innerFrame, text='%.2f hrs' % (billableHours), anchor=tk.NW).grid(row=row, column=2)
+                    tk.Label(self.innerFrame, text='%.2f hrs' % (
+                        billableHours), anchor=tk.NW).grid(row=row, column=2)
                 else:
                     tk.Label(self.innerFrame, text="").grid(row=row, column=2)
                 row += 1
 
         self.projectEntry = tk.StringVar()
         self.chargeNumberEntry = tk.StringVar()
-        tk.Entry(self.innerFrame, textvariable=self.projectEntry).grid(row=row, column=0)
+        tk.Entry(self.innerFrame, textvariable=self.projectEntry).grid(
+            row=row, column=0)
         entry = tk.Entry(self.innerFrame, textvariable=self.chargeNumberEntry)
         entry.grid(row=row, column=1)
         entry.bind('<Return>', self.addProject)
         entry.bind('<KP_Enter>', self.addProject)
-        button = tk.Button(self.innerFrame, text='Add Project', command=self.addProject)
+        button = tk.Button(self.innerFrame, text='Add Project',
+                           command=self.addProject)
         button.grid(row=row, column=2)
         button.bind('<Return>', self.addProject)
         button.bind('<KP_Enter>', self.addProject)
 
-        tk.Label(self.innerFrame, text="Total Hours: %.2f" % (self.hourTracker.getTodayTotalHours()), anchor=tk.NW).grid(row=0, column=3)
+        tk.Label(self.innerFrame, text="Total Hours: %.2f" % (
+            self.hourTracker.getTodayTotalHours()), anchor=tk.NW).grid(row=0, column=3)
         earliestReleaseTime = self.hourTracker.getEarliestReleaseTime()
-        tk.Label(self.innerFrame, text="Earliest Off Time: %s" % (self.hourTracker.getEarliestReleaseTime().time().strftime('%H:%M')), anchor=tk.NW).grid(row=1, column=3)
+        tk.Label(self.innerFrame, text="Earliest Off Time: %s" % (self.hourTracker.getEarliestReleaseTime(
+        ).time().strftime('%H:%M')), anchor=tk.NW).grid(row=1, column=3)
 
         self.innerFrame.grid(row=0, column=0)
 
     def addProject(self, *args):
-        self.hourTracker.addProject(Project(self.projectEntry.get(), int(self.chargeNumberEntry.get()), True))
+        self.hourTracker.addProject(
+            Project(self.projectEntry.get(), self.chargeNumberEntry.get(), True))
         self.projectEntry.set("")
         self.chargeNumberEntry.set('')
         self.createWidget()
+
 
 class SettingsDialog(tk.Toplevel):
     def __init__(self, parent, hour_tracker):
@@ -330,7 +358,7 @@ class SettingsDialog(tk.Toplevel):
 
         self.recordHoursPath = tk.StringVar()
         self.recordHoursPath.set(self.hour_tracker.recordHoursPath)
-        
+
         self.bodyFrame = None
         self.initial_focus = self.createBody()
 
@@ -344,8 +372,8 @@ class SettingsDialog(tk.Toplevel):
 
         self.protocol("WM_DELETE_WINDOW", self.cancel)
 
-        self.geometry("+%d+%d" % (parent.winfo_rootx()+50,
-                                  parent.winfo_rooty()+50))
+        self.geometry("+%d+%d" % (parent.winfo_rootx() + 50,
+                                  parent.winfo_rooty() + 50))
 
         self.initial_focus.focus_set()
 
@@ -356,9 +384,10 @@ class SettingsDialog(tk.Toplevel):
             self.bodyFrame.destroy()
         self.bodyFrame = tk.Frame(self)
         tk.Label(self.bodyFrame, text="Hour Log App:").grid(row=0, column=0)
-        entry = tk.Entry(self.bodyFrame, textvariable=self.recordHoursPath).grid(row=0, column=1)
-        tk.Button(self.bodyFrame, text='...', command=self.getRecordHoursPath).grid(row=0, column=2)
-
+        entry = tk.Entry(self.bodyFrame, textvariable=self.recordHoursPath).grid(
+            row=0, column=1)
+        tk.Button(self.bodyFrame, text='...',
+                  command=self.getRecordHoursPath).grid(row=0, column=2)
 
         self.bodyFrame.grid(row=0, column=0)
 
@@ -377,8 +406,10 @@ class SettingsDialog(tk.Toplevel):
         if self.acceptFrame is not None:
             self.acceptFrame.destroy()
         self.acceptFrame = tk.Frame(self)
-        tk.Button(self.acceptFrame, text="OK", command=self.ok).grid(row=0, column=0)
-        tk.Button(self.acceptFrame, text='Cancel', command=self.cancel).grid(row=0, column=1)
+        tk.Button(self.acceptFrame, text="OK",
+                  command=self.ok).grid(row=0, column=0)
+        tk.Button(self.acceptFrame, text='Cancel',
+                  command=self.cancel).grid(row=0, column=1)
         self.acceptFrame.grid(row=1, column=0)
 
     def cancel(self, event=None):
@@ -426,34 +457,32 @@ class TimeEditor(tk.Toplevel):
         self.minSelector = tk.StringVar()
         self.minSelector.set(dt.datetime.now().minute)
         self.projectSelector = tk.StringVar()
-        self.projectNames = [project.name for project \
-            in sorted(self.projects.values(), 
-                key=operator.attrgetter('chargeNumber'))]
+        self.projectNames = [project.name for project
+                             in sorted(self.projects.values(),
+                                       key=operator.attrgetter('chargeNumber'))]
         self.projectNameIdx = 0
         self.initial_focus = self.create(body)
         body.grid(row=0, column=0, padx=5, pady=5)
 
         buttonbox = tk.Frame(self)
-        submitButton = tk.Button(buttonbox, text='Submit', width=10, 
-            command=self.ok)
+        submitButton = tk.Button(buttonbox, text='Submit', width=10,
+                                 command=self.ok)
         submitButton.grid(row=0, column=0, padx=5, pady=5)
-        cancelButton = tk.Button(buttonbox, text='Cancel', width=10, 
-            command=self.cancel)
+        cancelButton = tk.Button(buttonbox, text='Cancel', width=10,
+                                 command=self.cancel)
         cancelButton.grid(row=0, column=1, padx=5, pady=5)
         self.bind("<Return>", self.ok)
         self.bind("<Escape>", self.cancel)
 
         buttonbox.grid(row=1, column=0)
 
-
-
         if not self.initial_focus:
             self.initial_focus = self
 
         self.protocol("WM_DELETE_WINDOW", self.cancel)
 
-        self.geometry("+%d+%d" % (parent.winfo_rootx()+50,
-                                  parent.winfo_rooty()+50))
+        self.geometry("+%d+%d" % (parent.winfo_rootx() + 50,
+                                  parent.winfo_rooty() + 50))
 
         self.initial_focus.focus_set()
         self.grab_set()
@@ -461,19 +490,42 @@ class TimeEditor(tk.Toplevel):
         self.wait_window(self)
 
     def create(self, parent):
-        dateEntry = tkc.DateEntry(parent, textvariable=self.dateSelector, 
-            maxdate=dt.datetime.today())
-        dateEntry.grid(row=0, column=0, columnspan=2)
-        hr = tk.Spinbox(parent, from_=0, to=23, textvariable=self.hrSelector,
-            width=5)
+        self.dateEntry = tkc.DateEntry(parent, textvariable=self.dateSelector,
+                                       maxdate=dt.datetime.today())
+        self.dateEntry.grid(row=0, column=0, columnspan=2)
+        hr = tk.Spinbox(parent, from_=-1, to=24, textvariable=self.hrSelector,
+                        width=5)
         hr.grid(row=1, column=0)
-        min_ = tk.Spinbox(parent, from_=0, to=59, textvariable=self.minSelector,
-            width=5)
+        min_ = tk.Spinbox(parent, from_=-1, to=60, textvariable=self.minSelector,
+                          width=5, command=self.rotateMin)
         min_.grid(row=1, column=1)
         if len(self.projects) > 0:
             self.projectSelector.set(self.projectNames[self.projectNameIdx])
         tk.OptionMenu(parent, self.projectSelector, *tuple(self.projectNames))\
-        .grid(row=2, column=0, columnspan=2)
+            .grid(row=2, column=0, columnspan=2)
+
+    def rotateMin(self):
+        if self.minSelector.get() == "-1":
+            self.minSelector.set("59")
+            hr = int(self.hrSelector.get()) - 1
+            if hr == -1:
+                hr = 23
+                date = dt.datetime.strptime(
+                    self.dateSelector.get(), '%m/%d/%y')
+                date = date.replace(day=date.day - 1)
+                self.dateSelector.set(date.strftime('%m/%d/%y'))
+            self.hrSelector.set(str(hr))
+        elif self.minSelector.get() == "60":
+            self.minSelector.set('0')
+            hr = int(self.hrSelector.get()) + 1
+            self.hrSelector.set(str(hr))
+            if hr == 24:
+                hr = 0
+                date = dt.datetime.strptime(
+                    self.dateSelector.get(), '%m/%d/%y')
+                date = date.replace(day=date.day + 1)
+                self.dateSelector.set(date.strftime('%m/%d/%y'))
+            self.hrSelector.set(str(hr))
 
     def ok(self, event=None):
 
@@ -496,7 +548,8 @@ class TimeEditor(tk.Toplevel):
         min_ = int(self.minSelector.get())
         date = date.replace(hour=hr)
         date = date.replace(minute=min_)
-        self.result=date, self.projects[self.projectSelector.get()]
+        self.result = date, self.projects[self.projectSelector.get()]
+
 
 class ChargeNumberTrackerApp:
     def __init__(self):
@@ -504,12 +557,14 @@ class ChargeNumberTrackerApp:
         if test:
             self.dataPath = os.path.join('.', '.chargeNumber')
         elif self.platform == 'Linux':
-            self.dataPath = os.path.expanduser(os.path.join('~', '.chargeNumber'))
+            self.dataPath = os.path.expanduser(
+                os.path.join('~', '.chargeNumber'))
         elif self.platform == 'Darwin':
-            self.dataPath = os.path.expanduser(os.path.join('~', '.chargeNumber'))
+            self.dataPath = os.path.expanduser(
+                os.path.join('~', '.chargeNumber'))
         elif self.platform == 'Windows':
-            self.dataPath = os.path.expanduser(os.path.join('~', 'Appdata', 
-                'Roaming', 'chargeNumber'))
+            self.dataPath = os.path.expanduser(os.path.join('~', 'Appdata',
+                                                            'Roaming', 'chargeNumber'))
         else:
             raise RuntimeError("Unknown Platform!")
         if not os.path.isdir(self.dataPath):
@@ -522,7 +577,7 @@ class ChargeNumberTrackerApp:
         except Exception as e:
             print(traceback.print_last())
             if tkMessageBox.askyesno("Charge Number Hour Tracker", "Failed to "
-                "load data - would you like to delete the old data?"):
+                                     "load data - would you like to delete the old data?"):
                 try:
                     os.remove(self.tracker.path)
                 except:
@@ -541,10 +596,12 @@ class ChargeNumberTrackerApp:
 
         self.htViewer = HourTrackerViewer(self.master, self.tracker)
         self.htViewer.grid(row=0, column=0, sticky=tk.NW)
-        ProjectList(self.master, self.tracker).grid(row=0, column=1, sticky=tk.NW)
+        ProjectList(self.master, self.tracker).grid(
+            row=0, column=1, sticky=tk.NW)
 
         self.master.bind('<Control-Shift-S>', self.arrive)
         self.master.mainloop()
+
     def createMenu(self):
         if self.menubar:
             self.menubar.destroy()
@@ -552,13 +609,13 @@ class ChargeNumberTrackerApp:
         filemenu = tk.Menu(self.menubar, tearoff=0)
         filemenu.add_command(label='Arrive', command=self.arrive)
         filemenu.add_command(label='Get Hours', command=self.getHours)
-        filemenu.add_command(label='Record Custom...', 
-            command=self.recordCustom)
+        filemenu.add_command(label='Record Custom...',
+                             command=self.recordCustom)
         filemenu.add_separator()
         filemenu.add_command(label='Preferences', command=self.setPrefs)
         filemenu.add_separator()
-        filemenu.add_command(label='Log Hours', command=self.logHours, 
-            state= ("disabled" if self.tracker.recordHoursPath is "" else "normal"))
+        filemenu.add_command(label='Log Hours', command=self.logHours,
+                             state=("disabled" if self.tracker.recordHoursPath is "" else "normal"))
         filemenu.add_separator()
         filemenu.add_command(label='Exit', command=self.destroy)
         self.menubar.add_cascade(label="File", menu=filemenu)
@@ -571,7 +628,6 @@ class ChargeNumberTrackerApp:
                 subprocess.Popen(shlex.split(excPath))
             elif platform.system() == 'Windows':
                 subprocess.Popen(shlex.split(excPath, posix=False))
-
 
     def arrive(self, *args):
         self.tracker.recordArrive()
@@ -593,6 +649,7 @@ class ChargeNumberTrackerApp:
     def setPrefs(self):
         d = SettingsDialog(self.master, self.tracker)
         self.createMenu()
+
 
 if __name__ == '__main__':
     root = ChargeNumberTrackerApp()
