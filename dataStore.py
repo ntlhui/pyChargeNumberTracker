@@ -76,7 +76,7 @@ class v0_0(BaseVersion):
 			projectAttr.update(localAttr)
 			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'], sortIdx = projectAttr['sort'])
 			projects.append(project)
-			if chargeNumber == 0:
+			if chargeNumber == '0':
 				arriveProject = project
 			projectMap[chargeNumber] = project
 		
@@ -89,7 +89,7 @@ class v0_0(BaseVersion):
 				project = projectMap[str(chargeNumber)]
 				dtTime = dt.datetime.fromtimestamp(float(time))
 				timeRecord[date][dtTime] = project
-				if chargeNumber != 0:
+				if chargeNumber != '0':
 					project.addHours(dtTime - prevTime, date)
 				prevTime = dtTime
 				prevTime = max(prevTime, prevTime)
@@ -137,7 +137,7 @@ class v1_0(BaseVersion):
 			projectAttr.update(localAttr)
 			project = Project(projectAttr['name'], chargeNumber, projectAttr['billable'], sortIdx=projectAttr['sort'])
 			projects.append(project)
-			if chargeNumber == 0:
+			if chargeNumber == '0':
 				arriveProject = project
 			projectMap[chargeNumber] = project
 		
@@ -150,7 +150,7 @@ class v1_0(BaseVersion):
 				project = projectMap[str(chargeNumber)]
 				dtTime = dt.datetime.fromtimestamp(float(time))
 				timeRecord[date][dtTime] = project
-				if chargeNumber != 0:
+				if chargeNumber != '0':
 					project.addHours(dtTime - prevTime, date)
 				prevTime = dtTime
 				prevTime = max(prevTime, prevTime)
