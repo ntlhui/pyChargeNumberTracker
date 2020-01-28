@@ -98,13 +98,13 @@ class HourTracker():
         existingBackups = glob.glob("%s.*" % (self.path))
         existingBackupNums = [(backup, int(os.path.basename(
             backup).split('.json.')[1])) for backup in existingBackups]
-        print(existingBackups)
         if len(existingBackups) >= self.NUM_BACKUPS:
             os.remove(existingBackupNums[-1][0])
             existingBackupNums = existingBackupNums[0:-1]
         for backup, number in sorted(existingBackupNums, reverse=True, key=lambda x: x[1]):
             os.rename(backup, "%s.%d" % (self.path, number + 1))
-        os.rename(self.path, "%s.%d" % (self.path, 0))
+        if os.path.isfile(self.path):
+            os.rename(self.path, "%s.%d" % (self.path, 0))
         with open(self.path, 'w') as file:
             json.dump(data, file, indent=4, sort_keys=True)
 
@@ -114,9 +114,12 @@ class HourTracker():
     def registerAddHoursCallback(self, func):
         self.addHoursCallback.append(func)
 
-    def getProjectNames(self):
-        return {project.name: project for project in self.projects
-                if project.chargeNumber != "0"}
+    def getProjectNames(self, includeArrival=False):
+        if includeArrival:
+            return {project.name: project for project in self.projects}
+        else:
+            return {project.name: project for project in self.projects
+                    if project.chargeNumber != "0"}
 
     def addProject(self, project):
         self.projects.append(project)
@@ -126,8 +129,8 @@ class HourTracker():
     def __today(self):
         return self.timeRecord[dt.datetime.today().date()]
 
-    def recordArrive(self):
-        self.start = dt.datetime.now()
+    def recordArrive(self, time=dt.datetime.now()):
+        self.start = time
         self.prevTime = self.start
         self.timeRecord[dt.datetime.today().date()] = {}
         self.__today()[self.start] = self.arriveProject
@@ -555,7 +558,7 @@ class ChargeNumberTrackerApp:
     def __init__(self):
         self.platform = platform.system()
         if test:
-            self.dataPath = os.path.join('.', '.chargeNumber')
+            self.dataPath = os.path.join('.', 'chargeNumber')
         elif self.platform == 'Linux':
             self.dataPath = os.path.expanduser(
                 os.path.join('~', '.chargeNumber'))
@@ -627,7 +630,7 @@ class ChargeNumberTrackerApp:
             if platform.system() == 'Linux':
                 subprocess.Popen(shlex.split(excPath))
             elif platform.system() == 'Windows':
-                subprocess.Popen(shlex.split(excPath, posix=False))
+                subprocess.Popen(shlex.split(excPath, posix=False), shell=True)
 
     def arrive(self, *args):
         self.tracker.recordArrive()
@@ -641,9 +644,13 @@ class ChargeNumberTrackerApp:
         print(self.tracker.getHours(dt.datetime.today().date()))
 
     def recordCustom(self):
-        d = TimeEditor(self.master, self.tracker.getProjectNames())
+        d = TimeEditor(
+            self.master, self.tracker.getProjectNames(includeArrival=True))
         if d.result:
-            self.tracker.addRecord(*d.result)
+            if d.result[1] == self.tracker.arriveProject:
+                self.tracker.recordArrive(d.result[0])
+            else:
+                self.tracker.addRecord(*d.result)
             self.htViewer.update()
 
     def setPrefs(self):
