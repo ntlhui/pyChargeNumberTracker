@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
 
 import tkinter as tk
-import tkinter.ttk as ttk
 import numpy as np
 import datetime as dt
 import json
 import platform
 import os
-import contextlib
 import tkcalendar as tkc
 from tkinter import messagebox as tkMessageBox
 import operator
 import dataStore
 import subprocess
 import shlex
-import platform
 from tkinter import filedialog as tkf
 import traceback
 import glob
-from math import inf
 
 test = True
 
@@ -199,12 +195,14 @@ class HourTracker():
 class HourTrackerViewer(tk.Frame):
     def __init__(self, master, hourTracker):
         self.hourTracker = hourTracker
-        super().__init__(master)
-        self.timeRecord = hourTracker.timeRecord
-
         self.innerFrame = None
         self.nameMap = None
         self.projectNameIdx = 0
+        self._displayedProjects = {}
+        self.timeRecord = hourTracker.timeRecord
+
+        super().__init__(master)
+
         self.__createWidget()
         self.hourTracker.registerAddProjectCallback(self.updateProject)
 
@@ -274,17 +272,41 @@ class HourTrackerViewer(tk.Frame):
     def setDate(self, *args):
         if self.recordFrame is not None:
             self.recordFrame.destroy()
+            self._displayedProjects = {}
         self.recordFrame = tk.Frame(self.innerFrame)
         date = dt.datetime.strptime(self.dateSelector.get(), '%m/%d/%y').date()
         if date in self.hourTracker.timeRecord:
             row = 0
             for record in sorted(self.hourTracker.timeRecord[date].items()):
-                tk.Label(self.recordFrame, text=record[0].strftime(
-                    '%H:%M')).grid(row=row, column=0)
-                tk.Label(self.recordFrame, text=record[1].name).grid(
-                    row=row, column=1)
+                timeLabel = tk.Label(self.recordFrame, text=record[0].strftime(
+                    '%H:%M'))
+                timeLabel.grid(row=row, column=0)
+                projectLabel = tk.Label(self.recordFrame, text=record[1].name)
+                projectLabel.grid(row=row, column=1)
+                projectLabel.bind('<Double-Button-1>',
+                                  self.__editChargeNumberHandler)
+                self._displayedProjects[projectLabel] = [
+                    record[0], timeLabel, record[1], self.hourTracker.timeRecord[date]]
                 row += 1
         self.recordFrame.grid(row=1, column=0, columnspan=2)
+
+    def __editChargeNumberHandler(self, event: tk.Event):
+        timestamp, timeLabel, project, projectTree = self._displayedProjects[event.widget]
+        d = TimeEditor(self, self.hourTracker.getProjectNames(includeArrival=True), title='Edit Time',
+                       time=self._displayedProjects[event.widget][0], project=project)
+        if d.result:
+            if d.result[1] != project and d.result[0] == timestamp:
+                #                 Just need to update the charge number
+                projectTree[timestamp] = d.result[1]
+            elif d.result[0] != timestamp and d.result[1] == project:
+                #                 Adjusting the time
+                projectTree.pop(timestamp, None)
+                projectTree[d.result[0]] = project
+            else:
+                #                 Adjusting time and charge number
+                projectTree.pop(timestamp, None)
+                projectTree[d.result[0]] = d.result[1]
+            self.update()
 
 
 class ProjectList(tk.Frame):
@@ -439,7 +461,7 @@ class SettingsDialog(tk.Toplevel):
 
 
 class TimeEditor(tk.Toplevel):
-    def __init__(self, parent, projects, title=None):
+    def __init__(self, parent, projects, title=None, time=dt.datetime.now(), project=None):
         tk.Toplevel.__init__(self,  parent)
         self.transient(parent)
 
@@ -452,18 +474,23 @@ class TimeEditor(tk.Toplevel):
 
         self.result = None
         self.projects = projects
+        self.time = time
 
         body = tk.Frame(self)
         self.dateSelector = tk.StringVar()
         self.hrSelector = tk.StringVar()
-        self.hrSelector.set(dt.datetime.now().hour)
+        self.hrSelector.set(time.hour)
         self.minSelector = tk.StringVar()
-        self.minSelector.set(dt.datetime.now().minute)
+        self.minSelector.set(time.minute)
         self.projectSelector = tk.StringVar()
         self.projectNames = [project.name for project
                              in sorted(self.projects.values(),
                                        key=operator.attrgetter('chargeNumber'))]
-        self.projectNameIdx = 0
+        if project is None:
+            self.projectNameIdx = 0
+        else:
+            self.projectNameIdx = self.projectNames.index(project.name)
+
         self.initial_focus = self.create(body)
         body.grid(row=0, column=0, padx=5, pady=5)
 
@@ -494,7 +521,7 @@ class TimeEditor(tk.Toplevel):
 
     def create(self, parent):
         self.dateEntry = tkc.DateEntry(parent, textvariable=self.dateSelector,
-                                       maxdate=dt.datetime.today())
+                                       maxdate=self.time)
         self.dateEntry.grid(row=0, column=0, columnspan=2)
         hr = tk.Spinbox(parent, from_=-1, to=24, textvariable=self.hrSelector,
                         width=5)
