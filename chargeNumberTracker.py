@@ -1,5 +1,44 @@
 #!/usr/bin/env python3
-
+###############################################################################
+#     Charge Number Timecard
+#     Copyright (C) 2020  Nathan Hui
+#
+#     This program is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+#
+#     This program is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+###############################################################################
+#
+# DATE        Name  Description
+# -----------------------------------------------------------------------------
+# 02/16/20    NH    Added time editing
+# 01/27/20    NH    Fixed backup, arrive, timeEdit
+# 01/21/20    NH    Fixed start from empty, Added wraparound, added backups
+# 01/07/20    NH    Fixed log hours launcher, Added settings editor, Enabling
+#                    string based charge numbers, Removed implementation of old
+#                    toDict to remove forward comptability, Added project
+#                    sorting
+# 01/04/20    NH    Added auto save
+# 01/02/20    NH    Added custom record add, rounding to earliest time off,
+#                    recording path
+# 12/22/19    NH    Fixed earliest release time
+# 12/12/19    NH    Initialized arrival charge number, added try catch to remove
+#                    old data, removed extraneous print, added shortcuts
+# 12/11/19    NH    Fixed addProject bug, added error to notify failure to
+#                    record start time, added initialization failure catch
+# 12/10/19    NH    Fixed on start bug
+# 12/09/19    NH    Initial Commit
+#
+###############################################################################
 import tkinter as tk
 import numpy as np
 import datetime as dt
