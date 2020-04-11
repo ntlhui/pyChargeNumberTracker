@@ -20,6 +20,7 @@
 #
 # DATE        Name  Description
 # -----------------------------------------------------------------------------
+# 02/20/20    NH    Added logging facility
 # 02/16/20    NH    Added time editing
 # 01/27/20    NH    Fixed backup, arrive, timeEdit
 # 01/21/20    NH    Fixed start from empty, Added wraparound, added backups
@@ -54,12 +55,17 @@ import shlex
 from tkinter import filedialog as tkf
 import traceback
 import glob
+import logging
+import sys
 
 test = True
 
 
 class Project():
     def __init__(self, name, chargeNumber, isBillable, sortIdx=-1):
+        self.__log = logging.getLogger(
+            "chargeNumberTracker.Project(%s)" % (chargeNumber))
+        self.__log.info("Created")
         self.name = name
         self.chargeNumber = chargeNumber
         self.hours = {}
@@ -71,6 +77,7 @@ class Project():
 
     def addHours(self, hours, date):
         assert(isinstance(hours, float) or isinstance(hours, dt.timedelta))
+        self.__log.info("Adding hours")
         if date not in self.hours:
             self.hours[date] = 0
         if isinstance(hours, float):
@@ -80,12 +87,14 @@ class Project():
 
     def setHours(self, hours, date):
         assert(isinstance(hours, float) or isinstance(hours, dt.timedelta))
+        self.__log.info("Setting total hours")
         if isinstance(hours, float):
             self.hours[date] = hours
         elif isinstance(hours, dt.timedelta):
             self.hours[date] = hours.total_seconds() / 60.0 / 60.0
 
     def getBillableHours(self, date):
+        self.__log.info("Retrieving total hours")
         if not self.isBillable:
             return 0
         if date in self.hours:
@@ -101,6 +110,8 @@ class HourTracker():
     NUM_BACKUPS = 4
 
     def __init__(self, path):
+        self.__log = logging.getLogger("chargeNumberTracker.HourTracker")
+        self.__log.info("Created")
         self.path = os.path.join(path, 'data.json')
         self.start = None
         self.prevTime = dt.datetime.fromtimestamp(0)
@@ -109,11 +120,21 @@ class HourTracker():
         self.addHoursCallback = []
         self.dailyHours = 0
 
+    def open(self):
+        self.__log.debug("Open")
+        self.__enter__()
+
+    def close(self):
+        self.__log.debug("Close")
+        self.__exit__(None, None, None)
+
     def __enter__(self):
+        self.__log.info("Initializing resources")
         if os.path.isfile(self.path):
             with open(self.path, 'r') as file:
                 data = json.load(file)
         else:
+            self.__log.info("New data store")
             data = {}
         data = dataStore.fromDict(data)
         self.dailyHours = data['dailyHours']
@@ -124,9 +145,11 @@ class HourTracker():
         self.recordHoursPath = data['recordHoursPath']
 
     def __exit__(self, exc_type, exc_value, tbk):
+        self.__log.info("Closing resources")
         self.flush()
 
     def flush(self):
+        self.__log.info("Flushing data")
         data = dataStore.toDict(dailyHours=self.dailyHours,
                                 projects=self.projects, timeRecord=self.timeRecord,
                                 recordHoursPath=self.recordHoursPath)
@@ -144,12 +167,15 @@ class HourTracker():
             json.dump(data, file, indent=4, sort_keys=True)
 
     def registerAddProjectCallback(self, func):
+        self.__log.debug("Adding AddProject callback")
         self.addProjectCallback.append(func)
 
     def registerAddHoursCallback(self, func):
+        self.__log.debug("Adding AddHours Callback")
         self.addHoursCallback.append(func)
 
     def getProjectNames(self, includeArrival=False):
+        self.__log.debug("Getting project names")
         if includeArrival:
             return {project.name: project for project in self.projects}
         else:
@@ -157,14 +183,17 @@ class HourTracker():
                     if project.chargeNumber != "0"}
 
     def addProject(self, project):
+        self.__log.debug("Adding project")
         self.projects.append(project)
         for func in self.addProjectCallback:
             func(project)
 
     def __today(self):
+        self.__log.debug("Getting today's records")
         return self.timeRecord[dt.datetime.today().date()]
 
     def recordArrive(self, time=dt.datetime.now()):
+        self.__log.info("Recording arrival")
         self.start = time
         self.prevTime = self.start
         self.timeRecord[dt.datetime.today().date()] = {}
@@ -174,6 +203,7 @@ class HourTracker():
         self.flush()
 
     def addRecord(self, time, project):
+        self.__log.info("Recording timestamp")
         self.timeRecord[time.date()][time] = project
 
         # Update project hours
@@ -196,6 +226,7 @@ class HourTracker():
         self.flush()
 
     def recordHours(self, project):
+        self.__log.info("Recording hours")
         time = dt.datetime.now()
         self.__today()[time] = project
         project.addHours(time - self.prevTime, time.date())
@@ -205,6 +236,7 @@ class HourTracker():
         self.flush()
 
     def getTodayTotalHours(self):
+        self.__log.info("Retrieving today's hours")
         date = dt.datetime.now().date()
         totalHours = 0
         projectHours = self.getHours(date)
@@ -622,19 +654,25 @@ class TimeEditor(tk.Toplevel):
 
 class ChargeNumberTrackerApp:
     def __init__(self):
+        self.__log = logging.getLogger("chargeNumberTracker.App")
         self.platform = platform.system()
         if test:
             self.dataPath = os.path.join('.', 'chargeNumber')
+            self.__log.info("Test mode")
         elif self.platform == 'Linux':
             self.dataPath = os.path.expanduser(
                 os.path.join('~', '.chargeNumber'))
+            self.__log.debug("Detected Linux")
         elif self.platform == 'Darwin':
             self.dataPath = os.path.expanduser(
                 os.path.join('~', '.chargeNumber'))
+            self.__log.debug("Detected MacOS")
         elif self.platform == 'Windows':
             self.dataPath = os.path.expanduser(os.path.join('~', 'Appdata',
                                                             'Roaming', 'chargeNumber'))
+            self.__log.debug("Detected Windows")
         else:
+            self.__log.warning("Unknown platform")
             raise RuntimeError("Unknown Platform!")
         if not os.path.isdir(self.dataPath):
             os.mkdir(self.dataPath)
@@ -642,19 +680,26 @@ class ChargeNumberTrackerApp:
         self.tracker = HourTracker(self.dataPath)
 
         try:
-            self.tracker.__enter__()
+            self.tracker.open()
         except Exception as e:
             print(traceback.print_last())
+            self.__log.info("Failed to load data")
             if tkMessageBox.askyesno("Charge Number Hour Tracker", "Failed to "
                                      "load data - would you like to delete the old data?"):
                 try:
+                    self.__log.info("Deleting old data")
                     os.remove(self.tracker.path)
+                    self.__log.info("Opening clean")
+                    self.tracker.open()
                 except:
-                    pass
-                self.tracker.__enter__()
+                    tkMessageBox.askokcancel(
+                        "Charge Number Hour Tracker", "Fatal Error - Exiting")
+                    sys.exit()
             else:
+                self.__log.info("User declined to clean bad data")
                 return
 
+        self.__log.debug("Creating GUI")
         self.master = tk.Tk()
         self.master.protocol("WM_DELETE_WINDOW", self.destroy)
 
@@ -663,16 +708,24 @@ class ChargeNumberTrackerApp:
 
         self.createMenu()
 
+        self.__log.debug("Creating Hour Tracker Viewer")
         self.htViewer = HourTrackerViewer(self.master, self.tracker)
         self.htViewer.grid(row=0, column=0, sticky=tk.NW)
+
+        self.__log.debug("Creating Project List Viewer")
         ProjectList(self.master, self.tracker).grid(
             row=0, column=1, sticky=tk.NW)
 
+        self.__log.debug("Assigning global hotkey")
         self.master.bind('<Control-Shift-S>', self.arrive)
+
+        self.__log.debug("Starting main loop")
         self.master.mainloop()
 
     def createMenu(self):
+        self.__log.info("Creating menu")
         if self.menubar:
+            self.__log.debug("Refreshing menu")
             self.menubar.destroy()
         self.menubar = tk.Menu(self.master)
         filemenu = tk.Menu(self.menubar, tearoff=0)
@@ -691,6 +744,7 @@ class ChargeNumberTrackerApp:
         self.master.config(menu=self.menubar)
 
     def logHours(self):
+        self.__log.info("Logging Hours")
         excPath = self.tracker.recordHoursPath
         if excPath is not "":
             if platform.system() == 'Linux':
@@ -699,30 +753,51 @@ class ChargeNumberTrackerApp:
                 subprocess.Popen(shlex.split(excPath, posix=False), shell=True)
 
     def arrive(self, *args):
+        self.__log.info("Recording arrive")
         self.tracker.recordArrive()
         self.htViewer.update()
 
     def destroy(self):
-        self.tracker.__exit__(None, None, None)
+        self.__log.info("Exiting")
+        self.tracker.close()
         self.master.destroy()
 
     def getHours(self):
+        self.__log.info("Retrieving hours")
         print(self.tracker.getHours(dt.datetime.today().date()))
 
     def recordCustom(self):
+        self.__log.info("Custom Time")
         d = TimeEditor(
             self.master, self.tracker.getProjectNames(includeArrival=True))
         if d.result:
+            self.__log.info("Received result")
             if d.result[1] == self.tracker.arriveProject:
+                self.__log.info("Custom arrival")
                 self.tracker.recordArrive(d.result[0])
             else:
+                self.__log.info("Custom project")
                 self.tracker.addRecord(*d.result)
             self.htViewer.update()
 
     def setPrefs(self):
+        self.__log.info("Opening settings")
         d = SettingsDialog(self.master, self.tracker)
         self.createMenu()
 
 
 if __name__ == '__main__':
+    logName = 'log.log'
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    consoleOutput = logging.StreamHandler(sys.stdout)
+    consoleOutput.setLevel(logging.WARNING)
+    formatter = logging.Formatter(
+        '%(asctime)s.%(msecs)03d: %(levelname)s:%(name)s: %(message)s', datefmt='%Y-%M-%d %H:%m:%S')
+    consoleOutput.setFormatter(formatter)
+    logger.addHandler(consoleOutput)
+    fileOutput = logging.FileHandler(logName)
+    fileOutput.setLevel(logging.INFO)
+    fileOutput.setFormatter(formatter)
+    logger.addHandler(fileOutput)
     root = ChargeNumberTrackerApp()
